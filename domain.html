@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>L2/L3 Domain KPI Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #edf2f8;
+      --surface: #ffffff;
+      --ink: #0f2445;
+      --muted: #5f6f86;
+      --line: #d8e1ec;
+      --brand-blue: #0b2f6b;
+      --brand-red: #dc2128;
+      --green: #1f8f4c;
+      --amber: #cf8d18;
+      --red: #c92a2a;
+      --teal: #0a7c75;
+      --sky: #0f5fb8;
+      --neutral: #53627a;
+      --shadow: 0 16px 36px rgba(9, 29, 62, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Aptos", "Helvetica Neue", sans-serif;
+      background:
+        radial-gradient(circle at 5% -25%, rgba(11, 47, 107, 0.16), rgba(11, 47, 107, 0) 45%),
+        linear-gradient(180deg, #f4f8fc 0%, var(--bg) 54%, #e7eef7 100%);
+      color: var(--ink);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.7fr 1fr;
+      gap: 24px;
+      padding: 42px max(24px, 6vw) 64px;
+      background: var(--brand-blue);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -8vw -13vw auto;
+      width: 36vw;
+      height: 36vw;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 68%);
+      pointer-events: none;
+    }
+    .brand-block { position: relative; z-index: 1; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .16em; font-weight: 800; font-size: 13px; color: rgba(255, 255, 255, 0.82); margin: 0 0 8px; }
+    h1 { margin: 0; font-size: clamp(30px, 4.2vw, 50px); line-height: 1.03; color: #ffffff; }
+    .subtitle { max-width: 760px; font-size: 17px; color: rgba(255, 255, 255, 0.9); }
+    .view-switch { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.28); }
+    .view-switch a { padding: 7px 16px; border-radius: 999px; color: #fff; text-decoration: none; font-weight: 700; font-size: 13px; }
+    .view-switch a.current { background: #fff; color: var(--brand-blue); }
+    .view-switch a:not(.current):hover { background: rgba(255, 255, 255, 0.16); }
+    .upload-card { align-self: center; background: rgba(255, 255, 255, 0.95); border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: var(--shadow); position: relative; z-index: 1; }
+    .upload-card input { width: 100%; padding: 12px; border-radius: 14px; background: white; color: var(--ink); border: 1px solid var(--line); }
+    .upload-card p { color: var(--muted); margin: 12px 0 0; font-size: 13px; }
+    .container { padding: 0 max(20px, 5vw) 44px; }
+    .toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; box-shadow: var(--shadow); margin-top: -34px; position: relative; z-index: 2; }
+    label { display: block; font-size: 12px; color: var(--muted); font-weight: 800; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; }
+    select, input[type="search"] { width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; color: var(--ink); background: #fff; font: inherit; font-size: 14px; }
+    .toolbar .lead select { border-color: var(--brand-blue); border-width: 2px; font-weight: 700; }
+    button { font: inherit; cursor: pointer; }
+    .btn { height: 42px; border: 0; border-radius: 12px; padding: 0 16px; background: var(--brand-blue); color: #fff; font-weight: 800; font-size: 14px; }
+    .btn:hover { filter: brightness(1.12); }
+    .btn.small { height: 36px; border-radius: 10px; padding: 0 14px; font-size: 12px; }
+    .btn.ghost { background: #fff; color: var(--brand-blue); border: 1px solid #cfd9e8; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+    .kpi-card { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; box-shadow: var(--shadow); min-height: 132px; }
+    .kpi-card:before { content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; background: var(--brand-blue); }
+    .kpi-card span { display: block; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+    .kpi-card strong { display: block; margin-top: 10px; font-size: 34px; line-height: 1.1; }
+    .kpi-card strong small { font-size: 15px; color: var(--muted); font-weight: 600; }
+    .kpi-card em { display: block; margin-top: 10px; color: var(--muted); font-size: 13px; font-style: normal; }
+    .kpi-card.success:before { background: var(--green); }
+    .kpi-card.warning:before { background: var(--amber); }
+    .kpi-card.danger:before { background: var(--red); }
+    .kpi-card.accent:before { background: cadetblue; }
+    .kpi-card.teal:before { background: var(--teal); }
+    .kpi-card.neutral:before { background: var(--neutral); }
+    .kpi-card.info:before { background: var(--sky); }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
+    h2 { margin: 0; font-size: 21px; }
+    .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+    .card-head p, .hint { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .actions select { height: 36px; width: auto; border-radius: 10px; font-size: 12px; }
+    .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 18px; }
+    .chart-grid .card { margin: 0; min-width: 0; }
+    .chart-box { position: relative; height: 280px; }
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); font-weight: 600; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+
+    /* Domain scorecards */
+    .domain-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+    .domain-card { text-align: left; background: #fbfdff; border: 1px solid var(--line); border-radius: 16px; padding: 16px; color: var(--ink); display: block; width: 100%; }
+    .domain-card:hover { border-color: #9db4d6; background: #f4f8fe; }
+    .domain-card.selected { border-color: var(--brand-blue); box-shadow: inset 0 0 0 1px var(--brand-blue); background: #eef4fd; }
+    .domain-card.idle { background: #f7f9fc; cursor: default; }
+    .domain-card.idle .dc-name, .domain-card.idle .dc-total { color: var(--muted); }
+    .dc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .dc-name { font-weight: 800; font-size: 16px; }
+    .dc-total { font-weight: 800; font-size: 24px; white-space: nowrap; }
+    .dc-total small { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .dc-meta { margin: 8px 0 10px; font-size: 12px; color: var(--muted); }
+    .dc-meta b { color: var(--ink); }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+    .chip { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #e6eef9; color: #123b72; }
+    .chip.zero { background: transparent; border: 1px dashed #c3cfdf; color: var(--muted); font-weight: 600; }
+    .bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #e7edf6; gap: 2px; }
+    .bar i { display: block; height: 100%; }
+    .b-done { background: var(--green); } .b-active { background: var(--amber); } .b-open { background: var(--red); } .b-other { background: #8593a8; }
+
+    /* Tables */
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    #taskTable { min-width: 1000px; }
+    th, td { padding: 11px 14px; border-bottom: 1px solid #e7edf6; text-align: left; font-size: 13px; vertical-align: top; }
+    th { position: sticky; top: 0; background: #e6eef9; font-size: 11px; color: #436082; text-transform: uppercase; letter-spacing: .09em; z-index: 1; white-space: nowrap; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { color: var(--brand-blue); }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody tr:hover { background: #f2f7ff; }
+    tr.group td { background: #f1f6fd; font-weight: 800; border-top: 1px solid #d5e0ef; }
+    tr.child td:first-child { padding-left: 44px; }
+    tr.total td { font-weight: 800; background: #fbfdff; border-bottom: 0; }
+    .link { background: none; border: 0; padding: 0; color: var(--brand-blue); font-weight: inherit; text-align: left; }
+    .link:hover { text-decoration: underline; }
+    .caret { background: none; border: 0; width: 22px; padding: 0; color: var(--muted); font-size: 11px; }
+    .rate { display: flex; align-items: center; gap: 8px; min-width: 130px; }
+    .rate .bar { flex: 1; }
+    .rate span { width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); }
+    .status-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-weight: 800; font-size: 12px; background: #e6eef9; color: #123b72; white-space: nowrap; }
+    .status-done { background: #ddf4e6; color: #11603a; }
+    .status-active { background: #fff2d8; color: #915f00; }
+    .status-open { background: #ffe2e2; color: #9f1f1f; }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+    .page-btn { min-width: 28px; height: 28px; border: 1px solid #cfd9e8; border-radius: 8px; background: #fff; color: #244261; font-size: 12px; font-weight: 700; padding: 0 8px; }
+    .page-btn:hover:not(:disabled) { background: #eef4fd; }
+    .page-btn:disabled { opacity: .42; cursor: not-allowed; }
+    .page-btn.active { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+    .empty { padding: 28px; text-align: center; color: var(--muted); font-size: 14px; }
+    footer { text-align: center; color: var(--muted); padding: 20px; font-size: 13px; }
+    @media (max-width: 980px) {
+      .hero, .chart-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="brand-block">
+      <p class="eyebrow">Global IT Operations</p>
+      <h1 id="pageTitle"></h1>
+      <p class="subtitle" id="pageSubtitle"></p>
+      <nav class="view-switch" aria-label="Dashboard view">
+        <a href="index.html" id="navApp">By application</a>
+        <a href="domain.html" id="navDomain">By domain</a>
+      </nav>
+    </div>
+    <div class="upload-card">
+      <label for="fileInput">Upload KPI tracker file</label>
+      <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" />
+      <p id="fileStatus">No file uploaded yet.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="toolbar" id="toolbar"></section>
+    <section class="kpi-grid" id="kpiGrid"></section>
+
+    <section class="card" id="domainSection" hidden>
+      <div class="card-head">
+        <div>
+          <h2>Domains</h2>
+          <p>Click a domain to drill into its applications. Dashed applications are in the support portfolio but had no tasks in this view.</p>
+        </div>
+        <div class="legend" id="statusLegend"></div>
+      </div>
+      <div class="domain-grid" id="domainGrid"></div>
+    </section>
+
+    <section class="chart-grid" id="chartGrid"></section>
+
+    <section class="card" style="margin-top:18px">
+      <div class="card-head">
+        <div>
+          <h2 id="breakdownTitle"></h2>
+          <p id="breakdownHint"></p>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="breakdownTable"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="card" id="taskCard">
+      <div class="card-head">
+        <div>
+          <h2 id="taskDetailsTitle">Task Details</h2>
+          <p id="tableCount">0 tasks displayed</p>
+        </div>
+        <div class="actions">
+          <select id="pageSize" aria-label="Rows per page">
+            <option value="10">10 per page</option>
+            <option value="25">25 per page</option>
+            <option value="50">50 per page</option>
+            <option value="100000">Show all</option>
+          </select>
+          <button class="btn small ghost" id="exportTasksBtn" type="button">Export tasks CSV</button>
+          <button class="btn small" id="exportBtn" type="button">Export KPI summary CSV</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table id="taskTable"><thead></thead><tbody></tbody></table></div>
+      <div class="pagination" id="tablePagination"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>L2/L3 KPI workspace. All file processing runs locally in your browser.</p>
+  </footer>
+
+<script>
+const MODE = 'domain'; // 'application' or 'domain'
+const EMBEDDED = {"fileName":"L2_L3_Tracker_September_2026.xlsx","sheets":{"TaskList":[{"TASK":"Resolve SEF WebApp batch deployment failure caused by stale XL Deploy CronJob record and deploy the related change to production","Type":"Change Request","Application":"Schedule Efficiency","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Line Ops","Ticket ID":""},{"TASK":"Stabilize SEF frontend, update application values, add a new page, and correct icon/button UI behavior","Type":"New Requirements","Application":"Schedule Efficiency","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed","Status":"Completed","Domain":"Line Ops","Ticket ID":""},{"TASK":"Coordinate UNIFEEDER service, port and terminal mappings; deploy UAT integration and obtain NOVA/C-Voyage validation","Type":"New Requirements","Application":"Schedule Efficiency","Date":"2026-09-29","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Pending","Domain":"Line Ops","Ticket ID":""},{"TASK":"Provision SEF UAT/PROD access and add operational users to UNIFEEDER UAT batch-log distribution","Type":"Access Needed","Application":"Schedule Efficiency","Date":"2026-09-25","POC":"Anthony","Shadowing":"Abed","Status":"Completed","Domain":"Line Ops","Ticket ID":""},{"TASK":"Update partner-code status in LARA from Under Validation to Compliant","Type":"Incident","Application":"Schedule Efficiency","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Requested","Domain":"Line Ops","Ticket ID":"INC2960953"},{"TASK":"Complete OneWay Container Tracking enhancement, LARA SQL business-rule updates, UAT validation and production deployment","Type":"New Requirements","Application":"OneWay","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Fix OneWay production tracking token-validation configuration and validate UAT, PRE and PROD","Type":"Incident","Application":"OneWay","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Migrate OneWay Partner and Location referential APIs from legacy B2B services to HIP and complete remaining access activities","Type":"New Requirements","Application":"OneWay","Date":"2026-09-30","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"In Progress","Domain":"Shipping","Ticket ID":""},{"TASK":"Update OneWay support process and access-request guidance for L3 support routing","Type":"New Requirements","Application":"OneWay","Date":"2026-09-08","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Build and test L2/L3 Tracker Copilot Studio automation proof of concept; review mailbox-folder configuration limitation","Type":"New Requirements","Application":"","Date":"2026-09-30","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"Pending","Domain":"","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation and retesting for Terminal Link","Type":"New Requirements","Application":"TERMINAL LINK","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"Communication","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation for OneWay","Type":"New Requirements","Application":"OneWay","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation for TANGRAM website","Type":"New Requirements","Application":"TANGRAM","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"Communication","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation for CCIS website","Type":"New Requirements","Application":"CCIS","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"Communication","Ticket ID":""},{"TASK":"Coordinate CMA Fondation penetration-test retest and remaining remediation findings","Type":"New Requirements","Application":"","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"","Ticket ID":"RITM3174135"},{"TASK":"Obtain complete certificate inventory and expiry schedule for applications in support scope from old and new PKI tools","Type":"Certificate","Application":"","Date":"2026-09-01","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"","Ticket ID":""},{"TASK":"Coordinate certificate renewal activities for IDLEFULL environments","Type":"Certificate","Application":"IDLE","Date":"2026-09-30","POC":"Mantach","Shadowing":"Abed","Status":"In Progress","Domain":"Shipping","Ticket ID":"RITM3135093; RITM3135089; RITM3135084"},{"TASK":"Coordinate certificate renewals and validation for CMACGM-GROUP, Corporate Website, SAMIR, EXPLORE and OneWay","Type":"Certificate","Application":"","Date":"2026-09-30","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"In Progress","Domain":"","Ticket ID":""},{"TASK":"Complete vCards entity onboarding, production data loading, access guidance and joiner/leaver maintenance guidance","Type":"Access Needed","Application":"vCards","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed","Status":"Completed","Domain":"Merit","Ticket ID":""},{"TASK":"Assess EServiceDesk TLS compliance and define migration requirement from unsupported .NET 5 to .NET 8","Type":"New Requirements","Application":"","Date":"2026-09-07","POC":"Anthony","Shadowing":"Abed","Status":"Pending","Domain":"","Ticket ID":""},{"TASK":"Investigate Corporate Website unexpected high-load warnings on PROD web request service","Type":"Incident","Application":"Corporate Website","Date":"2026-09-11","POC":"Omar; Abbas","Shadowing":"","Status":"In Progress","Domain":"Communication","Ticket ID":""},{"TASK":"Perform Corporate Website PRE/PROD change scheduling and post-deployment SRE sanity checks","Type":"Change Request","Application":"Corporate Website","Date":"2026-09-10","POC":"Omar; Abbas","Shadowing":"","Status":"Completed","Domain":"Communication","Ticket ID":"CHG0274593; CHG0274902"},{"TASK":"Perform Better Ways landing-page PRE/PROD deployment checks and SRE validation","Type":"Change Request","Application":"Corporate Website","Date":"2026-09-17","POC":"Abbas","Shadowing":"Omar","Status":"Completed","Domain":"Communication","Ticket ID":"CHG0275753; CHG0275806"},{"TASK":"Perform SAMIR PRE/PROD release scheduling and post-deployment SRE sanity checks","Type":"Change Request","Application":"","Date":"2026-09-09","POC":"Omar","Shadowing":"Abbas","Status":"Completed","Domain":"","Ticket ID":"CHG0274718; CHG0274818"},{"TASK":"Validate SAMIR issue fix on PRE and PROD and close deployment change requests","Type":"Change Request","Application":"","Date":"2026-09-18","POC":"Abbas","Shadowing":"Omar","Status":"Completed","Domain":"","Ticket ID":"CHG0276279; CHG0276310"},{"TASK":"Perform EasyStow PRE/PROD deployment scheduling and SRE sanity checks","Type":"Change Request","Application":"","Date":"2026-09-14","POC":"Abbas","Shadowing":"Omar","Status":"Completed","Domain":"","Ticket ID":"CHG0275063; CHG0275369"},{"TASK":"Handle MyEUP critical service incidents generated by PagerDuty","Type":"Incident","Application":"MyEUP","Date":"2026-09-06","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"In Progress","Domain":"MyEUP","Ticket ID":"INC2936531; INC2936885"},{"TASK":"Handle MyEUP Temporary Department Switch termination workflow issue and requester follow-up","Type":"Incident","Application":"MyEUP","Date":"2026-09-18","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Pending","Domain":"MyEUP","Ticket ID":"INC2948616"},{"TASK":"Handle MyEUP production response-time degradation incident","Type":"Incident","Application":"MyEUP","Date":"2026-09-24","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"In Progress","Domain":"MyEUP","Ticket ID":"INC2954269"},{"TASK":"Investigate repeated Corporate Website DEV HTTP monitor outage alerts on 29 September","Type":"Incident","Application":"Corporate Website","Date":"2026-09-29","POC":"Omar; Abbas","Shadowing":"Abed; Anthony; Mantach","Status":"Requested","Domain":"Communication","Ticket ID":"INC2959824; INC2959829; INC2959848; INC2959853; INC2959857"},{"TASK":"Investigate repeated Corporate Website DEV HTTP monitor outage alerts on 30 September","Type":"Incident","Application":"Corporate Website","Date":"2026-09-30","POC":"Omar; Abbas","Shadowing":"Abed; Anthony; Mantach","Status":"Requested","Domain":"Communication","Ticket ID":"INC2960919; INC2960920; INC2960939; INC2960946; INC2960956"},{"TASK":"Remove Shipmanager access and retain Hook Local Ops access for requester","Type":"Access Needed","Application":"Hook","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Requested","Domain":"Line Ops","Ticket ID":"SCTASK3498579"},{"TASK":"Deploy CCIS CMS translation-status and sitemap fixes to PRE and complete change-ticket closure","Type":"Change Request","Application":"CCIS","Date":"2026-09-22","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Pending","Domain":"Communication","Ticket ID":"CHG0276194"},{"TASK":"Review and approve CCIS CMS production deployment for translation-status and sitemap fixes","Type":"Change Request","Application":"CCIS","Date":"2026-09-30","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"Requested","Domain":"Communication","Ticket ID":"CHG0277924"},{"TASK":"Complete CCIS accessibility enhancement PRE/PROD change activities","Type":"Change Request","Application":"CCIS","Date":"2026-09-03","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Completed","Domain":"Communication","Ticket ID":"CHG0274069; CHG0274251"},{"TASK":"Complete Corporate Website Rise in Motion migration change and update ticket closure status","Type":"Change Request","Application":"Corporate Website","Date":"2026-09-25","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Pending","Domain":"Communication","Ticket ID":"CHG0277190"},{"TASK":"Apply Customer Agent Assistant hotfix to PRE and update change closure status","Type":"Change Request","Application":"","Date":"2026-09-21","POC":"Mantach","Shadowing":"","Status":"Pending","Domain":"","Ticket ID":"CHG0276180"},{"TASK":"Confirm SEF production deployment completion","Type":"Change Request","Application":"Schedule Efficiency","Date":"2026-09-22","POC":"Anthony","Shadowing":"Omar","Status":"Completed","Domain":"Line Ops","Ticket ID":"CHG0276074"}],"AppDomain":[{"Application":"OneWay","Domain":"Shipping"},{"Application":"ORCA","Domain":"Regions"},{"Application":"GBS","Domain":"Regions"},{"Application":"IRIS","Domain":"Line Ops"},{"Application":"Hook","Domain":"Line Ops"},{"Application":"SPARKS","Domain":"Tangram"},{"Application":"Corporate Website","Domain":"Communication"},{"Application":"vCards","Domain":"Merit"},{"Application":"Self-Service Kiosk","Domain":"Regions"},{"Application":"Schedule Efficiency","Domain":"Line Ops"},{"Application":"Horizons","Domain":"Communication"},{"Application":"Explore","Domain":"Tangram"},{"Application":"iStock","Domain":"Shipping"},{"Application":"Projectory","Domain":"Internal"},{"Application":"CMA SHIPS","Domain":"Communication"},{"Application":"TERMINAL LINK","Domain":"Communication"},{"Application":"OUR PURPOSE","Domain":"Communication"},{"Application":"TANGRAM","Domain":"Communication"},{"Application":"CCIS","Domain":"Communication"},{"Application":"IDLE","Domain":"Shipping"},{"Application":"MyEUP","Domain":"MyEUP"}]}};
+const DOMAIN_FIRST = MODE === 'domain';
+const NONE = 'Unassigned';
+const $ = id => document.getElementById(id);
+
+const columnAliases = {
+  task: ['task', 'title', 'subject', 'description'],
+  type: ['type', 'category', 'work type'],
+  application: ['application', 'app', 'system', 'platform'],
+  domain: ['domain', 'service line', 'tower', 'segment', 'area'],
+  date: ['date', 'created', 'creation date', 'start date'],
+  poc: ['poc', 'owner', 'lead', 'assignee', 'responsible'],
+  shadowing: ['shadowing', 'backup', 'watcher'],
+  status: ['status', 'state', 'progress'],
+  ticket: ['ticket id', 'ticket', 'reference']
+};
+const BUCKETS = ['Done', 'Active', 'Open', 'Other'];
+const BUCKET_COLOR = { Done: '#1f8f4c', Active: '#cf8d18', Open: '#c92a2a', Other: '#8593a8' };
+const PALETTE = ['#0b2f6b', '#dc2128', '#0f5fb8', '#0a7c75', '#cf8d18', '#53627a', '#7a4fa3', '#6980a4'];
+const FILTERS = [
+  { key: 'domain', label: 'Domain', get: r => [r.domain] },
+  { key: 'app', label: 'Application', get: r => [r.app] },
+  { key: 'status', label: 'Status', get: r => [r.bucket] },
+  { key: 'type', label: 'Type', get: r => [r.type] },
+  { key: 'poc', label: 'POC', get: r => r.pocs }
+];
+
+let book = null;          // { fileName, sheets: { name: [rowObjects] } }
+let rows = [];
+let headers = [];
+let cols = {};
+let portfolio = new Map(); // domain -> Set(applications) from the mapping sheet
+let appToDomain = new Map();
+let charts = {};
+let currentPage = 1;
+let pageSize = 10;
+let sort = null;
+let collapsed = new Set();
+const filter = { domain: 'all', app: 'all', status: 'all', type: 'all', poc: 'all' };
+
+/* ---------- Page chrome ---------- */
+$('pageTitle').textContent = DOMAIN_FIRST ? 'L2/L3 Domain KPI Dashboard' : 'L2/L3 Operational KPI Dashboard';
+$('pageSubtitle').textContent = DOMAIN_FIRST
+  ? 'Execution quality, backlog health and issue pressure by business domain, then by the applications inside each domain.'
+  : 'Monitor execution quality, backlog health, issue pressure, and delivery performance across L2/L3 support streams.';
+$(DOMAIN_FIRST ? 'navDomain' : 'navApp').classList.add('current');
+$('domainSection').hidden = !DOMAIN_FIRST;
+$('statusLegend').innerHTML = BUCKETS.slice(0, 3).map(b => `<span><i style="background:${BUCKET_COLOR[b]}"></i>${b}</span>`).join('');
+
+(function buildToolbar() {
+  const order = DOMAIN_FIRST ? ['domain', 'app', 'status', 'type', 'poc'] : ['status', 'app', 'domain', 'type', 'poc'];
+  const lead = DOMAIN_FIRST ? 'domain' : '';
+  $('toolbar').innerHTML =
+    `<div><label for="sheetSelect">Sheet</label><select id="sheetSelect" disabled></select></div>` +
+    order.map(k => {
+      const f = FILTERS.find(x => x.key === k);
+      return `<div class="${k === lead ? 'lead' : ''}"><label for="f_${k}">${f.label}</label><select id="f_${k}"><option value="all">All</option></select></div>`;
+    }).join('') +
+    `<div><label for="searchBox">Search</label><input id="searchBox" type="search" placeholder="Search task, POC, ticket..." /></div>` +
+    `<button class="btn" id="resetBtn" type="button">Reset filters</button>`;
+  FILTERS.forEach(f => $('f_' + f.key).addEventListener('change', e => setFilter(f.key, e.target.value, true)));
+  $('searchBox').addEventListener('input', () => { currentPage = 1; render(); });
+  $('resetBtn').addEventListener('click', resetFilters);
+  $('sheetSelect').addEventListener('change', e => loadSheet(e.target.value));
+})();
+
+(function buildChartGrid() {
+  const defs = DOMAIN_FIRST ? [
+    ['domainChart', 'Tasks by Domain', 'Stacked by status. Click a bar to filter.'],
+    ['applicationChart', 'Applications', 'Click a bar to filter.'],
+    ['typeChart', 'Task Type by Domain', 'What kind of work each domain generates.'],
+    ['statusChart', 'Status Distribution', 'Click a slice to filter.'],
+    ['pocChart', 'Workload by POC', 'Shared tasks count once for each POC.'],
+    ['weekChart', 'Weekly Activity', 'Tasks by week of the Date column.']
+  ] : [
+    ['statusChart', 'Status Distribution', 'Click a slice to filter.'],
+    ['applicationChart', 'Application Breakdown', 'Stacked by status. Click a bar to filter.'],
+    ['typeChart', 'Task Type Mix', 'Click a slice to filter.'],
+    ['domainChart', 'Domain KPI', 'Stacked by status. Click a bar to filter.'],
+    ['pocChart', 'Workload by POC', 'Shared tasks count once for each POC.'],
+    ['weekChart', 'Weekly Activity', 'Tasks by week of the Date column.']
+  ];
+  $('chartGrid').innerHTML = defs.map(([id, title, hint]) =>
+    `<article class="card"><div class="card-head"><div><h2 id="${id}Title">${title}</h2><p>${hint}</p></div></div><div class="chart-box"><canvas id="${id}"></canvas></div></article>`).join('');
+})();
+
+$('fileInput').addEventListener('change', handleFileUpload);
+$('exportBtn').addEventListener('click', exportSummaryCsv);
+$('exportTasksBtn').addEventListener('click', exportTasksCsv);
+$('pageSize').addEventListener('change', e => { pageSize = Number(e.target.value); currentPage = 1; render(); });
+
+/* ---------- Loading ---------- */
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { $('fileStatus').textContent = 'The Excel reader could not be loaded (no network access to the CDN).'; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+    const sheets = {};
+    wb.SheetNames.forEach(name => { sheets[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false, dateNF: 'yyyy-mm-dd' }); });
+    loadBook({ fileName: file.name, sheets }, false);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadBook(b, embedded) {
+  book = b;
+  portfolio = new Map();
+  appToDomain = new Map();
+  const taskSheets = [];
+  Object.entries(book.sheets).forEach(([name, data]) => {
+    if (!data.length) return;
+    const keys = Object.keys(data[0]).map(k => k.trim().toLowerCase()).sort().join('|');
+    if (keys === 'application|domain') readMapping(data);
+    else taskSheets.push(name);
+  });
+  const sel = $('sheetSelect');
+  sel.innerHTML = taskSheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.disabled = taskSheets.length < 2;
+  book.embedded = embedded;
+  if (taskSheets.length) loadSheet(taskSheets[0]);
+  else $('fileStatus').textContent = `${book.fileName}: no task sheet found.`;
+}
+
+function readMapping(data) {
+  data.forEach(r => {
+    const clean = normalizeRow(r);
+    const key = k => Object.keys(clean).find(h => h.toLowerCase() === k);
+    const app = String(clean[key('application')] || '').trim();
+    const dom = String(clean[key('domain')] || '').trim();
+    if (!app || !dom) return;
+    appToDomain.set(app.toLowerCase(), dom);
+    if (!portfolio.has(dom)) portfolio.set(dom, new Set());
+    portfolio.get(dom).add(app);
+  });
+}
+
+function loadSheet(name) {
+  const raw = book.sheets[name].map(normalizeRow);
+  headers = Array.from(new Set(raw.flatMap(r => Object.keys(r))));
+  cols = {};
+  Object.keys(columnAliases).forEach(k => { cols[k] = findColumn(k); });
+  const val = (r, k) => cols[k] ? String(r[cols[k]] ?? '').trim() : '';
+  const split = s => s.split(/[;,\/]/).map(x => x.trim()).filter(Boolean);
+  rows = raw.map(r => {
+    const app = val(r, 'application') || NONE;
+    const domain = val(r, 'domain') || appToDomain.get(app.toLowerCase()) || NONE;
+    const status = val(r, 'status');
+    const row = {
+      raw: r, task: val(r, 'task'), type: val(r, 'type') || 'Unspecified', app, domain, status,
+      bucket: statusBucket(status), date: parseDate(val(r, 'date')),
+      pocs: split(val(r, 'poc')), tickets: split(val(r, 'ticket'))
+    };
+    if (!row.pocs.length) row.pocs = [NONE];
+    const text = `${row.task} ${row.type}`.toLowerCase();
+    row.issue = row.bucket !== 'Done' && /(incident|issue|bug|block|risk|security|vulnerab|remediation|outage|degradation|failure)/.test(text);
+    row.deploy = /(deploy|go-live|golive|release|hotfix|change request)/.test(text);
+    row.haystack = (Object.values(r).join(' ') + ' ' + domain + ' ' + app).toLowerCase();
+    return row;
+  });
+  Object.keys(filter).forEach(k => { filter[k] = 'all'; });
+  $('searchBox').value = '';
+  sort = null;
+  collapsed = new Set();
+  currentPage = 1;
+  $('fileStatus').textContent = book.embedded
+    ? `Showing ${book.fileName} (built-in snapshot, ${rows.length} tasks). Upload a newer tracker to replace it.`
+    : `${book.fileName} loaded: ${rows.length} tasks from sheet "${name}".`;
+  render();
+}
+
+function normalizeRow(row) {
+  const clean = {};
+  Object.entries(row).forEach(([k, v]) => { clean[String(k).trim()] = typeof v === 'string' ? v.trim() : v; });
+  return clean;
+}
+
+function findColumn(aliasKey) {
+  const hs = headers.map(h => ({ original: h, normalized: h.toLowerCase().trim() }));
+  for (const alias of columnAliases[aliasKey]) { const m = hs.find(h => h.normalized === alias); if (m) return m.original; }
+  for (const alias of columnAliases[aliasKey]) { const m = hs.find(h => h.normalized.includes(alias)); if (m) return m.original; }
+  return null;
+}
+
+function statusBucket(status) {
+  const s = status.toLowerCase();
+  if (!s) return 'Other';
+  if (/(not started|to do|todo)/.test(s)) return 'Open';
+  if (/(done|delivered|closed|complete|resolved|deployed|go-live|golive)/.test(s)) return 'Done';
+  if (/(progress|active|ongoing|wip|started)/.test(s)) return 'Active';
+  if (/(open|pending|blocked|waiting|requested|new|hold)/.test(s)) return 'Open';
+  return 'Other';
+}
+
+function parseDate(value) {
+  if (!value) return null;
+  const p = String(value).match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (p) return new Date(Number(p[1]), Number(p[2]) - 1, Number(p[3]));
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/* ---------- Filtering ---------- */
+function setFilter(key, value, fromSelect) {
+  filter[key] = (!fromSelect && filter[key] === value) ? 'all' : value; // chart clicks toggle
+  if (key === 'domain' && filter.app !== 'all' && filter.domain !== 'all' &&
+      !rows.some(r => r.domain === filter.domain && r.app === filter.app)) filter.app = 'all';
+  currentPage = 1;
+  render();
+}
+
+function resetFilters() {
+  Object.keys(filter).forEach(k => { filter[k] = 'all'; });
+  $('searchBox').value = '';
+  currentPage = 1;
+  render();
+}
+
+function filteredRows(ignoreKey) {
+  const search = $('searchBox').value.toLowerCase().trim();
+  return rows.filter(r =>
+    FILTERS.every(f => f.key === ignoreKey || filter[f.key] === 'all' || f.get(r).includes(filter[f.key])) &&
+    (!search || r.haystack.includes(search)));
+}
+
+function populateFilters() {
+  FILTERS.forEach(f => {
+    // Applications are narrowed to the selected domain so the two filters cascade.
+    const source = f.key === 'app' && filter.domain !== 'all' ? rows.filter(r => r.domain === filter.domain) : rows;
+    let options = Array.from(new Set(source.flatMap(f.get))).sort((a, b) => (a === NONE) - (b === NONE) || a.localeCompare(b));
+    if (f.key === 'status') options = BUCKETS.filter(b => options.includes(b));
+    const sel = $('f_' + f.key);
+    sel.innerHTML = '<option value="all">All</option>' + options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    sel.value = filter[f.key];
+  });
+}
+
+/* ---------- Aggregation ---------- */
+function stats(list) {
+  const s = { total: list.length, Done: 0, Active: 0, Open: 0, Other: 0, issues: 0, deploys: 0 };
+  list.forEach(r => { s[r.bucket]++; if (r.issue) s.issues++; if (r.deploy) s.deploys++; });
+  s.rate = s.total ? s.Done / s.total : 0;
+  return s;
+}
+function groupBy(list, fn) {
+  const m = new Map();
+  list.forEach(r => { const k = fn(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+  return m;
+}
+const byVolume = (a, b) => (a[0] === NONE) - (b[0] === NONE) || b[1].length - a[1].length || a[0].localeCompare(b[0]);
+
+/* ---------- Render ---------- */
+function render() {
+  populateFilters();
+  const list = filteredRows();
+  renderKpis(list);
+  if (DOMAIN_FIRST) renderDomainCards();
+  renderCharts(list);
+  renderBreakdown(list);
+  renderTable(list);
+}
+
+function renderKpis(list) {
+  const s = stats(list);
+  const domains = new Set(list.filter(r => r.domain !== NONE).map(r => r.domain));
+  const apps = new Set(list.filter(r => r.app !== NONE).map(r => r.app));
+  const allApps = new Set([...appToDomain.keys(), ...rows.filter(r => r.app !== NONE).map(r => r.app.toLowerCase())]);
+  const allDomains = new Set([...portfolio.keys(), ...rows.filter(r => r.domain !== NONE).map(r => r.domain)]);
+  const unassigned = list.filter(r => r.domain === NONE).length;
+  const tickets = new Set(list.flatMap(r => r.tickets)).size;
+  const card = (cls, label, value, note) => `<article class="kpi-card ${cls}"><span>${label}</span><strong>${value}</strong><em>${note}</em></article>`;
+  const core = [
+    card('primary', 'Total Tasks', s.total, 'Tasks matching the current filters'),
+    card('success', 'Done', s.Done, 'Completed / delivered / closed'),
+    card('warning', 'Open / Active', s.Open + s.Active, `${s.Active} in progress, ${s.Open} pending or requested`),
+    card('info', 'Completion Rate', pct(s.rate), 'Done ÷ total tasks'),
+    card('danger', 'Open Issues', s.issues, 'Unfinished incidents, security and remediation work'),
+    card('accent', 'Deployments', s.deploys, 'Deployment, release and change-request tasks')
+  ];
+  const domainCard = card('teal', 'Active Domains', `${domains.size} <small>of ${allDomains.size}</small>`, `${unassigned} task${unassigned === 1 ? '' : 's'} with no domain`);
+  const appCard = card('neutral', 'Active Applications', `${apps.size} <small>of ${allApps.size}</small>`, 'Applications with at least one task');
+  const ticketCard = card('neutral', 'Tickets Linked', tickets, `${list.filter(r => !r.tickets.length).length} tasks without a ticket ID`);
+  $('kpiGrid').innerHTML = (DOMAIN_FIRST ? [domainCard, appCard, ...core] : [...core, appCard, ticketCard]).join('');
+}
+
+function miniBar(s) {
+  if (!s.total) return '<div class="bar"></div>';
+  return '<div class="bar">' + BUCKETS.filter(b => s[b]).map(b =>
+    `<i class="b-${b.toLowerCase()}" style="width:${(s[b] / s.total) * 100}%" title="${b}: ${s[b]}"></i>`).join('') + '</div>';
+}
+
+function renderDomainCards() {
+  // Cards ignore the domain filter itself so the other domains stay visible for comparison.
+  const groups = groupBy(filteredRows('domain'), r => r.domain);
+  const narrowed = FILTERS.some(f => f.key !== 'domain' && filter[f.key] !== 'all') || $('searchBox').value.trim();
+  const entries = [...groups.entries()].sort(byVolume);
+  if (!narrowed) portfolio.forEach((_, d) => { if (!groups.has(d)) entries.push([d, []]); });
+  $('domainGrid').innerHTML = entries.map(([domain, list]) => {
+    const s = stats(list);
+    const appGroups = [...groupBy(list, r => r.app).entries()].sort(byVolume);
+    const active = new Set(appGroups.map(([a]) => a.toLowerCase()));
+    const idleApps = narrowed ? [] : [...(portfolio.get(domain) || [])].filter(a => !active.has(a.toLowerCase()));
+    const chips = appGroups.map(([a, l]) => `<span class="chip">${esc(a)} · ${l.length}</span>`).join('') +
+      idleApps.map(a => `<span class="chip zero">${esc(a)}</span>`).join('');
+    if (!s.total) {
+      return `<div class="domain-card idle"><div class="dc-top"><span class="dc-name">${esc(domain)}</span><span class="dc-total">0 <small>tasks</small></span></div>
+        <div class="dc-meta">No activity in this period</div><div class="chips">${chips}</div></div>`;
+    }
+    return `<button type="button" class="domain-card ${filter.domain === domain ? 'selected' : ''}" data-domain="${esc(domain)}" aria-pressed="${filter.domain === domain}">
+      <div class="dc-top"><span class="dc-name">${esc(domain)}</span><span class="dc-total">${s.total} <small>task${s.total === 1 ? '' : 's'}</small></span></div>
+      <div class="dc-meta"><b>${pct(s.rate)}</b> complete · <b>${s.Open + s.Active}</b> open · <b>${s.issues}</b> issue${s.issues === 1 ? '' : 's'}</div>
+      ${miniBar(s)}<div class="chips">${chips}</div></button>`;
+  }).join('') || '<div class="empty">No tasks match the current filters.</div>';
+}
+$('domainGrid').addEventListener('click', e => {
+  const card = e.target.closest('[data-domain]');
+  if (card) setFilter('domain', card.dataset.domain);
+});
+
+/* ---------- Charts ---------- */
+function renderCharts(list) {
+  if (typeof Chart === 'undefined') {
+    document.querySelectorAll('.chart-box').forEach(b => { b.innerHTML = '<div class="empty">Charts unavailable: Chart.js could not be loaded.</div>'; });
+    return;
+  }
+  Chart.defaults.font.family = '"Segoe UI", "Aptos", "Helvetica Neue", sans-serif';
+  Chart.defaults.color = '#5f6f86';
+  const byBucket = { stackFn: r => r.bucket, stackOrder: BUCKETS, color: b => BUCKET_COLOR[b] };
+
+  const sc = stats(list);
+  const present = BUCKETS.filter(b => sc[b]);
+  roundChart('statusChart', 'doughnut', present, present.map(b => sc[b]), present.map(b => BUCKET_COLOR[b]), v => setFilter('status', v));
+
+  stackedBar('domainChart', list, r => [r.domain], { ...byBucket, onClick: v => setFilter('domain', v) });
+  stackedBar('applicationChart', list, r => [r.app], { ...byBucket, limit: 12, onClick: v => setFilter('app', v) });
+  if (DOMAIN_FIRST) $('applicationChartTitle').textContent = filter.domain === 'all' ? 'Applications (all domains)' : `Applications in ${filter.domain}`;
+
+  const types = [...groupBy(list, r => r.type).entries()].sort((a, b) => b[1].length - a[1].length);
+  const typeColor = t => PALETTE[types.findIndex(e => e[0] === t) % PALETTE.length];
+  if (DOMAIN_FIRST) {
+    stackedBar('typeChart', list, r => [r.domain], { stackFn: r => r.type, stackOrder: types.map(e => e[0]), color: typeColor, onClick: v => setFilter('domain', v) });
+  } else {
+    roundChart('typeChart', 'pie', types.map(e => e[0]), types.map(e => e[1].length), types.map(e => typeColor(e[0])), v => setFilter('type', v));
+  }
+
+  stackedBar('pocChart', list, r => r.pocs, { ...byBucket, onClick: v => setFilter('poc', v) });
+
+  const weekKey = r => { if (!r.date) return []; const d = new Date(r.date); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return [d.getTime()]; };
+  stackedBar('weekChart', list, weekKey, { ...byBucket, horizontal: false, sortKeys: (a, b) => a - b,
+    labelFn: t => 'Week of ' + new Date(Number(t)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) });
+}
+
+function roundChart(id, type, labels, data, colors, onClick) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart($(id), {
+    type,
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#fff', borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: type === 'doughnut' ? '58%' : 0,
+      onClick: (e, els, chart) => { if (els.length) onClick(chart.data.labels[els[0].index]); },
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 12, generateLabels: chart => chart.data.labels.map((l, i) => ({
+          text: `${l}  ${chart.data.datasets[0].data[i]}`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: '#fff', index: i })) } },
+        tooltip: { callbacks: { label: c => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${pct(c.parsed / t)})`; } } }
+      }
+    }
+  });
+}
+
+function stackedBar(id, list, keysFn, o) {
+  const horizontal = o.horizontal !== false;
+  const counts = new Map();
+  list.forEach(r => keysFn(r).forEach(k => {
+    if (!counts.has(k)) counts.set(k, { total: 0 });
+    const c = counts.get(k); const s = o.stackFn(r);
+    c.total++; c[s] = (c[s] || 0) + 1;
+  }));
+  let keys = [...counts.keys()];
+  keys.sort(o.sortKeys || ((a, b) => (a === NONE) - (b === NONE) || counts.get(b).total - counts.get(a).total));
+  if (o.limit) keys = keys.slice(0, o.limit);
+  const stacks = o.stackOrder.filter(s => keys.some(k => counts.get(k)[s]));
+  if (charts[id]) charts[id].destroy();
+  const canvas = $(id);
+  canvas.parentElement.style.height = (horizontal ? Math.max(280, keys.length * 32 + 80) : 280) + 'px';
+  const valueAxis = { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#edf1f7' } };
+  const categoryAxis = { stacked: true, grid: { display: false }, ticks: { autoSkip: false, color: '#0f2445' } };
+  charts[id] = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: keys.map(k => o.labelFn ? o.labelFn(k) : k),
+      datasets: stacks.map(s => ({ label: s, data: keys.map(k => counts.get(k)[s] || 0), backgroundColor: o.color(s), borderColor: '#fff', borderWidth: 1, borderRadius: 3, maxBarThickness: 26 }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? 'y' : 'x',
+      onClick: o.onClick ? (e, els) => { if (els.length) o.onClick(keys[els[0].index]); } : undefined,
+      onHover: (e, els) => { e.native.target.style.cursor = els.length && o.onClick ? 'pointer' : 'default'; },
+      interaction: { mode: 'index', axis: horizontal ? 'y' : 'x', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12 } },
+        tooltip: { filter: c => c.parsed[horizontal ? 'x' : 'y'] > 0, callbacks: { footer: items => 'Total: ' + items.reduce((a, c) => a + c.parsed[horizontal ? 'x' : 'y'], 0) } }
+      },
+      scales: horizontal ? { x: valueAxis, y: categoryAxis } : { x: categoryAxis, y: valueAxis }
+    }
+  });
+}
+
+/* ---------- Breakdown table ---------- */
+function breakdownCells(s) {
+  return `<td class="num">${s.total}</td><td class="num">${s.Done}</td><td class="num">${s.Active}</td><td class="num">${s.Open}</td>
+    <td><div class="rate">${miniBar(s)}<span>${pct(s.rate)}</span></div></td><td class="num">${s.issues}</td><td class="num">${s.deploys}</td>`;
+}
+
+function renderBreakdown(list) {
+  const table = $('breakdownTable');
+  const metricHead = '<th class="num">Tasks</th><th class="num">Done</th><th class="num">Active</th><th class="num">Open</th><th>Completion</th><th class="num">Open issues</th><th class="num">Deployments</th>';
+  let body = '';
+  if (DOMAIN_FIRST) {
+    $('breakdownTitle').textContent = 'Domain → Application Breakdown';
+    $('breakdownHint').textContent = 'Each domain with the applications inside it. Click a name to filter; use the arrow to collapse a domain.';
+    table.querySelector('thead').innerHTML = `<tr><th>Domain / Application</th>${metricHead}</tr>`;
+    [...groupBy(list, r => r.domain).entries()].sort(byVolume).forEach(([domain, dl]) => {
+      const closed = collapsed.has(domain);
+      const apps = [...groupBy(dl, r => r.app).entries()].sort(byVolume);
+      body += `<tr class="group"><td><button class="caret" data-toggle="${esc(domain)}" aria-expanded="${!closed}" aria-label="Toggle ${esc(domain)}">${closed ? '▶' : '▼'}</button>
+        <button class="link" data-set="domain" data-value="${esc(domain)}">${esc(domain)}</button> <span class="muted" style="font-weight:600">· ${apps.length} app${apps.length === 1 ? '' : 's'}</span></td>${breakdownCells(stats(dl))}</tr>`;
+      if (!closed) apps.forEach(([app, al]) => {
+        body += `<tr class="child"><td><button class="link" data-set="app" data-value="${esc(app)}" data-domain="${esc(domain)}">${esc(app)}</button></td>${breakdownCells(stats(al))}</tr>`;
+      });
+    });
+  } else {
+    $('breakdownTitle').textContent = 'Application Summary';
+    $('breakdownHint').textContent = 'Per-application scorecard. Click a name to filter.';
+    table.querySelector('thead').innerHTML = `<tr><th>Application</th><th>Domain</th>${metricHead}</tr>`;
+    [...groupBy(list, r => r.app).entries()].sort(byVolume).forEach(([app, al]) => {
+      const domains = [...new Set(al.map(r => r.domain))].join(', ');
+      body += `<tr><td><button class="link" data-set="app" data-value="${esc(app)}">${esc(app)}</button></td><td>${esc(domains)}</td>${breakdownCells(stats(al))}</tr>`;
+    });
+  }
+  if (list.length) body += `<tr class="total"><td${DOMAIN_FIRST ? '' : ' colspan="2"'}>Total</td>${breakdownCells(stats(list))}</tr>`;
+  table.querySelector('tbody').innerHTML = body || `<tr><td colspan="9" class="empty">No tasks match the current filters.</td></tr>`;
+}
+$('breakdownTable').addEventListener('click', e => {
+  const t = e.target.closest('[data-toggle]');
+  if (t) { collapsed.has(t.dataset.toggle) ? collapsed.delete(t.dataset.toggle) : collapsed.add(t.dataset.toggle); render(); return; }
+  const l = e.target.closest('[data-set]');
+  if (!l) return;
+  if (l.dataset.domain) filter.domain = l.dataset.domain;
+  setFilter(l.dataset.set, l.dataset.value, true);
+});
+
+/* ---------- Task table ---------- */
+function tableHeaders() {
+  if (!DOMAIN_FIRST) return headers;
+  const lead = [cols.domain, cols.application].filter(Boolean);
+  return [...lead, ...headers.filter(h => !lead.includes(h))];
+}
+function cellValue(row, h) {
+  if (h === cols.domain) return row.domain;
+  if (h === cols.application) return row.app;
+  return String(row.raw[h] ?? '');
+}
+
+function renderTable(list) {
+  const hs = tableHeaders();
+  const sorted = [...list];
+  if (sort) {
+    sorted.sort((a, b) => cellValue(a, sort.key).localeCompare(cellValue(b, sort.key), undefined, { numeric: true }) * sort.dir);
+  } else if (DOMAIN_FIRST) {
+    const rank = v => (v === NONE ? '￿' : v);
+    sorted.sort((a, b) => rank(a.domain).localeCompare(rank(b.domain)) || rank(a.app).localeCompare(rank(b.app)) || (b.date || 0) - (a.date || 0));
+  }
+  const table = $('taskTable');
+  table.querySelector('thead').innerHTML = '<tr>' + hs.map(h => {
+    const arrow = sort && sort.key === h ? (sort.dir === 1 ? ' ▲' : ' ▼') : '';
+    return `<th class="sortable" data-sort="${esc(h)}" aria-sort="${arrow ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}">${esc(h)}${arrow}</th>`;
+  }).join('') + '</tr>';
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  currentPage = Math.min(currentPage, totalPages);
+  const pageRows = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  table.querySelector('tbody').innerHTML = pageRows.map(row => '<tr>' + hs.map(h => {
+    const v = cellValue(row, h);
+    if (h === cols.status) return `<td><span class="status-pill status-${row.bucket.toLowerCase()}">${esc(v || 'Unspecified')}</span></td>`;
+    if ((h === cols.domain || h === cols.application) && v === NONE) return `<td class="muted">${NONE}</td>`;
+    if (h === cols.date || h === cols.type) return `<td style="white-space:nowrap">${esc(v)}</td>`;
+    return `<td>${esc(v)}</td>`;
+  }).join('') + '</tr>').join('') || `<tr><td colspan="${hs.length}" class="empty">No tasks match the current filters.</td></tr>`;
+
+  const active = FILTERS.filter(f => filter[f.key] !== 'all').map(f => `${f.label}: ${filter[f.key]}`);
+  $('taskDetailsTitle').textContent = 'Task Details' + (active.length ? ' - ' + active.join(' - ') : '');
+  $('tableCount').textContent = `${sorted.length} task${sorted.length === 1 ? '' : 's'} matched - page ${currentPage} of ${totalPages}`;
+  renderPagination(sorted.length, totalPages);
+}
+$('taskTable').addEventListener('click', e => {
+  const th = e.target.closest('[data-sort]');
+  if (!th) return;
+  const key = th.dataset.sort;
+  sort = !sort || sort.key !== key ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : null;
+  currentPage = 1;
+  render();
+});
+
+function renderPagination(totalRows, totalPages) {
+  const el = $('tablePagination');
+  if (totalRows === 0 || totalPages === 1) { el.innerHTML = ''; return; }
+  const items = buildPageItems(totalPages, currentPage, 5).map(item => item === '...'
+    ? '<span class="muted">...</span>'
+    : `<button type="button" class="page-btn${item === currentPage ? ' active' : ''}" data-page="${item}">${item}</button>`).join('');
+  el.innerHTML = `
+    <button type="button" class="page-btn" data-page="1" ${currentPage <= 1 ? 'disabled' : ''}>First</button>
+    <button type="button" class="page-btn" data-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''}>&lt;</button>
+    ${items}
+    <button type="button" class="page-btn" data-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''}>&gt;</button>
+    <button type="button" class="page-btn" data-page="${totalPages}" ${currentPage >= totalPages ? 'disabled' : ''}>Last</button>`;
+}
+$('tablePagination').addEventListener('click', e => {
+  const b = e.target.closest('[data-page]');
+  if (!b || b.disabled) return;
+  currentPage = Number(b.dataset.page);
+  renderTable(filteredRows());
+});
+
+function buildPageItems(totalPages, current, maxVisible) {
+  if (totalPages <= maxVisible) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const pages = [1];
+  const sibling = Math.max(1, Math.floor((maxVisible - 3) / 2));
+  let start = Math.max(2, current - sibling);
+  let end = Math.min(totalPages - 1, current + sibling);
+  if (current <= sibling + 2) { start = 2; end = maxVisible - 1; }
+  else if (current >= totalPages - (sibling + 1)) { start = totalPages - (maxVisible - 2); end = totalPages - 1; }
+  if (start > 2) pages.push('...');
+  for (let p = start; p <= end; p += 1) pages.push(p);
+  if (end < totalPages - 1) pages.push('...');
+  pages.push(totalPages);
+  return pages;
+}
+
+/* ---------- Export ---------- */
+function downloadCsv(name, lines) {
+  const csv = lines.map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportSummaryCsv() {
+  const list = filteredRows();
+  const line = (scope, domain, app, s) => [scope, domain, app, s.total, s.Done, s.Active, s.Open, pct(s.rate), s.issues, s.deploys];
+  const out = [['Level', 'Domain', 'Application', 'Tasks', 'Done', 'Active', 'Open', 'Completion Rate', 'Open Issues', 'Deployments']];
+  out.push(line('Total', 'All', 'All', stats(list)));
+  if (DOMAIN_FIRST) {
+    [...groupBy(list, r => r.domain).entries()].sort(byVolume).forEach(([d, dl]) => {
+      out.push(line('Domain', d, 'All', stats(dl)));
+      [...groupBy(dl, r => r.app).entries()].sort(byVolume).forEach(([a, al]) => out.push(line('Application', d, a, stats(al))));
+    });
+  } else {
+    [...groupBy(list, r => r.app).entries()].sort(byVolume).forEach(([a, al]) =>
+      out.push(line('Application', [...new Set(al.map(r => r.domain))].join('; '), a, stats(al))));
+    [...groupBy(list, r => r.domain).entries()].sort(byVolume).forEach(([d, dl]) => out.push(line('Domain', d, 'All', stats(dl))));
+  }
+  downloadCsv(DOMAIN_FIRST ? 'l2_l3_domain_kpi_summary.csv' : 'l2_l3_kpi_summary.csv', out);
+}
+
+function exportTasksCsv() {
+  const hs = tableHeaders();
+  downloadCsv('l2_l3_tasks.csv', [hs, ...filteredRows().map(r => hs.map(h => cellValue(r, h)))]);
+}
+
+/* ---------- Helpers ---------- */
+function pct(v) { return `${Math.round(v * 100)}%`; }
+function esc(value) { return String(value).replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch])); }
+
+if (EMBEDDED) loadBook(EMBEDDED, true); else render();
+</script>
+</body>
+</html>
