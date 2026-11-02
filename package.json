@@ -1,0 +1,18 @@
+{
+  "name": "l2l3-support-kpis",
+  "version": "2.0.0",
+  "private": true,
+  "description": "L2/L3 Support KPI dashboard: static page, monthly Excel tracker",
+  "scripts": {
+    "test": "node test/run-tests.js",
+    "fixture": "node test/make-fixture.js",
+    "publish-snapshot": "node scripts/publish.js",
+    "vendor": "node scripts/vendor.js"
+  },
+  "dependencies": {
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "chart.js": "4.4.1"
+  }
+}

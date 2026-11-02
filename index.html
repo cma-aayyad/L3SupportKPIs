@@ -1,807 +1,783 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>L2/L3 Operational KPI Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <style>
-    :root {
-      --bg: #edf2f8;
-      --surface: #ffffff;
-      --ink: #0f2445;
-      --muted: #5f6f86;
-      --line: #d8e1ec;
-      --brand-blue: #0b2f6b;
-      --brand-red: #dc2128;
-      --green: #1f8f4c;
-      --amber: #cf8d18;
-      --red: #c92a2a;
-      --teal: #0a7c75;
-      --sky: #0f5fb8;
-      --neutral: #53627a;
-      --shadow: 0 16px 36px rgba(9, 29, 62, 0.12);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", "Aptos", "Helvetica Neue", sans-serif;
-      background:
-        radial-gradient(circle at 5% -25%, rgba(11, 47, 107, 0.16), rgba(11, 47, 107, 0) 45%),
-        linear-gradient(180deg, #f4f8fc 0%, var(--bg) 54%, #e7eef7 100%);
-      color: var(--ink);
-    }
-    .hero {
-      display: grid;
-      grid-template-columns: 1.7fr 1fr;
-      gap: 24px;
-      padding: 42px max(24px, 6vw) 64px;
-      background: var(--brand-blue);
-      position: relative;
-      overflow: hidden;
-    }
-    .hero::after {
-      content: "";
-      position: absolute;
-      inset: auto -8vw -13vw auto;
-      width: 36vw;
-      height: 36vw;
-      border-radius: 999px;
-      background: radial-gradient(circle, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 68%);
-      pointer-events: none;
-    }
-    .brand-block { position: relative; z-index: 1; }
-    .eyebrow { text-transform: uppercase; letter-spacing: .16em; font-weight: 800; font-size: 13px; color: rgba(255, 255, 255, 0.82); margin: 0 0 8px; }
-    h1 { margin: 0; font-size: clamp(30px, 4.2vw, 50px); line-height: 1.03; color: #ffffff; }
-    .subtitle { max-width: 760px; font-size: 17px; color: rgba(255, 255, 255, 0.9); }
-    .view-switch { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.28); }
-    .view-switch a { padding: 7px 16px; border-radius: 999px; color: #fff; text-decoration: none; font-weight: 700; font-size: 13px; }
-    .view-switch a.current { background: #fff; color: var(--brand-blue); }
-    .view-switch a:not(.current):hover { background: rgba(255, 255, 255, 0.16); }
-    .upload-card { align-self: center; background: rgba(255, 255, 255, 0.95); border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: var(--shadow); position: relative; z-index: 1; }
-    .upload-card input { width: 100%; padding: 12px; border-radius: 14px; background: white; color: var(--ink); border: 1px solid var(--line); }
-    .upload-card p { color: var(--muted); margin: 12px 0 0; font-size: 13px; }
-    .container { padding: 0 max(20px, 5vw) 44px; }
-    .toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; box-shadow: var(--shadow); margin-top: -34px; position: relative; z-index: 2; }
-    label { display: block; font-size: 12px; color: var(--muted); font-weight: 800; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; }
-    select, input[type="search"] { width: 100%; height: 42px; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; color: var(--ink); background: #fff; font: inherit; font-size: 14px; }
-    .toolbar .lead select { border-color: var(--brand-blue); border-width: 2px; font-weight: 700; }
-    button { font: inherit; cursor: pointer; }
-    .btn { height: 42px; border: 0; border-radius: 12px; padding: 0 16px; background: var(--brand-blue); color: #fff; font-weight: 800; font-size: 14px; }
-    .btn:hover { filter: brightness(1.12); }
-    .btn.small { height: 36px; border-radius: 10px; padding: 0 14px; font-size: 12px; }
-    .btn.ghost { background: #fff; color: var(--brand-blue); border: 1px solid #cfd9e8; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
-    .kpi-card { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px; box-shadow: var(--shadow); min-height: 132px; }
-    .kpi-card:before { content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; background: var(--brand-blue); }
-    .kpi-card span { display: block; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
-    .kpi-card strong { display: block; margin-top: 10px; font-size: 34px; line-height: 1.1; }
-    .kpi-card strong small { font-size: 15px; color: var(--muted); font-weight: 600; }
-    .kpi-card em { display: block; margin-top: 10px; color: var(--muted); font-size: 13px; font-style: normal; }
-    .kpi-card.success:before { background: var(--green); }
-    .kpi-card.warning:before { background: var(--amber); }
-    .kpi-card.danger:before { background: var(--red); }
-    .kpi-card.accent:before { background: cadetblue; }
-    .kpi-card.teal:before { background: var(--teal); }
-    .kpi-card.neutral:before { background: var(--neutral); }
-    .kpi-card.info:before { background: var(--sky); }
-    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
-    h2 { margin: 0; font-size: 21px; }
-    .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
-    .card-head p, .hint { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
-    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .actions select { height: 36px; width: auto; border-radius: 10px; font-size: 12px; }
-    .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 18px; }
-    .chart-grid .card { margin: 0; min-width: 0; }
-    .chart-box { position: relative; height: 280px; }
-    .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); font-weight: 600; }
-    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2/L3 Support KPIs</title>
+<style>
+/* ---------- tokens (swap --brand / --accent for your existing branding colours) ---------- */
+:root {
+  color-scheme: light;
+  --brand: #0b2d6b; --brand-2: #163f8c; --brand-ink: #ffffff; --accent: #e2001a;
+  --bg: #f2f4f8; --surface: #ffffff; --ink: #17213a; --muted: #5a6680; --line: #dbe1ec; --soft: #eef2f8;
+  --good: #1d8a4b; --bad: #c62828; --warn: #a86300;
+  --s-requested: #8b95a9; --s-pending: #e3a21a; --s-progress: #2f6fd6; --s-done: #1d8a4b; --s-unknown: #c5cbd6;
+  --radius: 10px; --radius-sm: 6px;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--font); }
+a { color: var(--brand-2); }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid #7aa7ff; outline-offset: 2px; }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+.hidden { display: none !important; }
 
-    /* Domain scorecards */
-    .domain-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
-    .domain-card { text-align: left; background: #fbfdff; border: 1px solid var(--line); border-radius: 16px; padding: 16px; color: var(--ink); display: block; width: 100%; }
-    .domain-card:hover { border-color: #9db4d6; background: #f4f8fe; }
-    .domain-card.selected { border-color: var(--brand-blue); box-shadow: inset 0 0 0 1px var(--brand-blue); background: #eef4fd; }
-    .domain-card.idle { background: #f7f9fc; cursor: default; }
-    .domain-card.idle .dc-name, .domain-card.idle .dc-total { color: var(--muted); }
-    .dc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-    .dc-name { font-weight: 800; font-size: 16px; }
-    .dc-total { font-weight: 800; font-size: 24px; white-space: nowrap; }
-    .dc-total small { font-size: 12px; color: var(--muted); font-weight: 600; }
-    .dc-meta { margin: 8px 0 10px; font-size: 12px; color: var(--muted); }
-    .dc-meta b { color: var(--ink); }
-    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-    .chip { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #e6eef9; color: #123b72; }
-    .chip.zero { background: transparent; border: 1px dashed #c3cfdf; color: var(--muted); font-weight: 600; }
-    .bar { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #e7edf6; gap: 2px; }
-    .bar i { display: block; height: 100%; }
-    .b-done { background: var(--green); } .b-active { background: var(--amber); } .b-open { background: var(--red); } .b-other { background: #8593a8; }
+/* ---------- header ---------- */
+.top { background: var(--brand); color: var(--brand-ink); border-bottom: 4px solid var(--accent); }
+.top-inner { max-width: 1400px; margin: 0 auto; padding: 14px 20px 0; }
+.top-row { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+.title { margin: 0; font-size: 1.35rem; font-weight: 650; letter-spacing: .2px; }
+.title small { font-weight: 400; opacity: .75; font-size: .85rem; margin-left: 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid transparent; border-radius: var(--radius-sm); padding: 7px 12px; cursor: pointer; background: var(--surface); color: var(--ink); white-space: nowrap; }
+.btn:hover { filter: brightness(.96); }
+.btn-ghost { background: transparent; color: inherit; border-color: rgba(255,255,255,.45); }
+.btn-ghost:hover { background: rgba(255,255,255,.1); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-line { background: var(--surface); border-color: var(--line); }
+.top select { background: var(--brand-2); color: #fff; border: 1px solid rgba(255,255,255,.45); border-radius: var(--radius-sm); padding: 6px 8px; max-width: 100%; }
+.banner { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 10px; font-size: .88rem; opacity: .95; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+.badge-local { background: #ffe08a; color: #4a3500; }
+.badge-warn { background: var(--accent); color: #fff; text-decoration: none; }
+.notice { background: #fff4d6; color: #4a3500; border-radius: var(--radius-sm); padding: 6px 10px; font-size: .85rem; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 12px; }
+.tab { color: #dfe7f7; text-decoration: none; padding: 8px 14px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; font-weight: 500; }
+.tab:hover { background: rgba(255,255,255,.08); color: #fff; }
+.tab[aria-current="page"] { background: var(--bg); color: var(--brand); }
 
-    /* Tables */
-    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
-    table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    #taskTable { min-width: 1000px; }
-    th, td { padding: 11px 14px; border-bottom: 1px solid #e7edf6; text-align: left; font-size: 13px; vertical-align: top; }
-    th { position: sticky; top: 0; background: #e6eef9; font-size: 11px; color: #436082; text-transform: uppercase; letter-spacing: .09em; z-index: 1; white-space: nowrap; }
-    th.sortable { cursor: pointer; user-select: none; }
-    th.sortable:hover { color: var(--brand-blue); }
-    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    tbody tr:hover { background: #f2f7ff; }
-    tr.group td { background: #f1f6fd; font-weight: 800; border-top: 1px solid #d5e0ef; }
-    tr.child td:first-child { padding-left: 44px; }
-    tr.total td { font-weight: 800; background: #fbfdff; border-bottom: 0; }
-    .link { background: none; border: 0; padding: 0; color: var(--brand-blue); font-weight: inherit; text-align: left; }
-    .link:hover { text-decoration: underline; }
-    .caret { background: none; border: 0; width: 22px; padding: 0; color: var(--muted); font-size: 11px; }
-    .rate { display: flex; align-items: center; gap: 8px; min-width: 130px; }
-    .rate .bar { flex: 1; }
-    .rate span { width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
-    .muted { color: var(--muted); }
-    .status-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-weight: 800; font-size: 12px; background: #e6eef9; color: #123b72; white-space: nowrap; }
-    .status-done { background: #ddf4e6; color: #11603a; }
-    .status-active { background: #fff2d8; color: #915f00; }
-    .status-open { background: #ffe2e2; color: #9f1f1f; }
-    .pagination { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
-    .page-btn { min-width: 28px; height: 28px; border: 1px solid #cfd9e8; border-radius: 8px; background: #fff; color: #244261; font-size: 12px; font-weight: 700; padding: 0 8px; }
-    .page-btn:hover:not(:disabled) { background: #eef4fd; }
-    .page-btn:disabled { opacity: .42; cursor: not-allowed; }
-    .page-btn.active { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
-    .empty { padding: 28px; text-align: center; color: var(--muted); font-size: 14px; }
-    footer { text-align: center; color: var(--muted); padding: 20px; font-size: 13px; }
-    @media (max-width: 980px) {
-      .hero, .chart-grid { grid-template-columns: 1fr; }
-      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-  </style>
+/* ---------- layout ---------- */
+main { max-width: 1400px; margin: 0 auto; padding: 16px 20px 40px; }
+.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 8px; align-items: end; margin-bottom: 16px; }
+.filters label { display: grid; gap: 2px; font-size: .8rem; color: var(--muted); min-width: 0; }
+.filters select, .filters input { width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 14px; }
+.chip { background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: .82rem; display: inline-flex; gap: 4px; align-items: center; }
+.chip button { border: 0; background: transparent; cursor: pointer; padding: 0 6px; font-size: 1rem; line-height: 1; }
+section.block { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; min-width: 0; }
+section.block > h2 { margin: 0 0 12px; font-size: 1.02rem; font-weight: 650; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.grid-2 > section.block { margin-bottom: 0; }
+.stack > * + * { margin-top: 16px; }
+
+/* ---------- KPI cards ---------- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr)); gap: 10px; margin-bottom: 16px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: var(--radius-sm); padding: 10px 12px; min-width: 0; }
+.kpi .v { font-size: 1.65rem; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: .84rem; color: var(--muted); }
+.kpi .d { font-size: .8rem; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.d.good { color: var(--good); } .d.bad { color: var(--bad); } .d.neutral { color: var(--muted); }
+
+/* ---------- domain cards: the stacked status bar is the signature element ---------- */
+.domains { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; margin-bottom: 16px; }
+.dcard { display: flex; flex-direction: column; justify-content: flex-start; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; cursor: pointer; min-width: 0; }
+.dcard:hover { border-color: var(--brand-2); }
+.dcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.dcard h3 { margin: 0; font-size: 1rem; display: flex; justify-content: space-between; gap: 8px; }
+.dcard .big { font-size: 1.9rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.dcard .meta { font-size: .83rem; color: var(--muted); }
+.sbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--soft); margin: 10px 0 6px; }
+.sbar span { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .78rem; color: var(--muted); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+/* ---------- tables ---------- */
+.table-wrap { overflow-x: auto; max-width: 100%; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+th, td { padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { background: var(--soft); font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
+th[data-sort] { cursor: pointer; }
+th[data-sort]:hover { color: var(--brand-2); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: #f7f9fd; }
+tr.sub td:first-child { padding-left: 26px; }
+tr.dom td { font-weight: 600; background: #fafbfe; }
+.age-hot { background: #fde7e7; color: var(--bad); font-weight: 600; border-radius: 4px; padding: 1px 6px; }
+.status { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: .78rem; color: #fff; white-space: nowrap; }
+td.task { min-width: 220px; }
+td.nowrap { white-space: nowrap; }
+.flag { color: var(--warn); font-size: .78rem; }
+
+/* ---------- charts ---------- */
+.chart { position: relative; height: 270px; }
+.chart.tall { height: 340px; }
+.chart-msg { padding: 24px; text-align: center; color: var(--muted); }
+
+/* ---------- lists / quality ---------- */
+.toplist { list-style: none; margin: 0; padding: 0; }
+.toplist li { display: grid; grid-template-columns: 64px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.toplist li:last-child { border-bottom: 0; }
+.toplist .age { font-size: 1.25rem; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--bad); }
+.qlist { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.qitem { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius-sm); padding: 12px; cursor: pointer; }
+.qitem .c { font-size: 1.5rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.qitem.ok .c { color: var(--good); } .qitem.warn .c { color: var(--warn); }
+.qitem[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.qitem small { display: block; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
+
+/* ---------- empty / drop ---------- */
+.empty { text-align: center; padding: 56px 20px; background: var(--surface); border: 2px dashed var(--line); border-radius: var(--radius); }
+.empty h2 { margin: 0 0 6px; }
+body.dragging main { outline: 3px dashed var(--accent); outline-offset: -8px; }
+dialog { border: 0; border-radius: var(--radius); max-width: min(560px, 94vw); padding: 20px; }
+dialog::backdrop { background: rgba(10,20,40,.45); }
+dialog code { background: var(--soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 9px 16px; border-radius: var(--radius-sm); z-index: 20; max-width: 92vw; }
+.print-head { display: none; }
+
+@media (max-width: 640px) {
+  .top-inner, main { padding-left: 12px; padding-right: 12px; }
+  .title small { display: block; margin: 2px 0 0; }
+  .tab { padding: 7px 10px; }
+  .kpi .v { font-size: 1.4rem; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- print: A4 landscape, controls hidden ---------- */
+@page { size: A4 landscape; margin: 10mm; }
+@media print {
+  html, body { background: #fff; font-size: 11px; }
+  .no-print, .top, .filters, .chips, .toast { display: none !important; }
+  main { max-width: none; padding: 0; }
+  .print-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px solid var(--accent); margin-bottom: 8px; padding-bottom: 4px; }
+  .print-head h1 { margin: 0; font-size: 1.4rem; color: var(--brand); }
+  section.block, .kpi, .dcard { break-inside: avoid; }
+  section.block { padding: 8px 10px; margin-bottom: 8px; }
+  .kpis { grid-template-columns: repeat(9, 1fr); gap: 6px; margin-bottom: 8px; }
+  .kpi .v { font-size: 1.25rem; }
+  .domains { grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+  .dcard { padding: 8px; } .dcard .big { font-size: 1.3rem; }
+  .table-wrap { overflow: visible; border: 0; }
+  th, td { padding: 3px 6px; }
+  .print-cols { display: grid; grid-template-columns: 3fr 2fr; gap: 8px; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+<!-- Shared data. A missing file simply means "nothing published yet". -->
+<script src="data/latest.js"></script>
+<script src="data/history/index.js"></script>
+<script src="core.js"></script>
 </head>
 <body>
-  <header class="hero">
-    <div class="brand-block">
-      <p class="eyebrow">Global IT Operations</p>
-      <h1 id="pageTitle"></h1>
-      <p class="subtitle" id="pageSubtitle"></p>
-      <nav class="view-switch" aria-label="Dashboard view">
-        <a href="index.html" id="navApp">By application</a>
-        <a href="domain.html" id="navDomain">By domain</a>
-      </nav>
+<header class="top">
+  <div class="top-inner">
+    <div class="top-row">
+      <h1 class="title">L2/L3 Support KPIs <small>L3 Support unit</small></h1>
+      <div class="actions no-print">
+        <label class="hidden" for="period">Period</label>
+        <select id="period" aria-label="Period"></select>
+        <button class="btn btn-primary" id="btn-upload" type="button">Upload tracker</button>
+        <button class="btn btn-ghost" id="btn-publish" type="button">Publish snapshot</button>
+        <button class="btn btn-ghost" id="btn-print" type="button">Print / PDF</button>
+        <button class="btn btn-ghost" id="btn-clear" type="button">Clear local data</button>
+        <input type="file" id="file" accept=".xlsx,.xlsm,.xls" hidden>
+      </div>
     </div>
-    <div class="upload-card">
-      <label for="fileInput">Upload KPI tracker file</label>
-      <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" />
-      <p id="fileStatus">No file uploaded yet.</p>
-    </div>
-  </header>
+    <div class="banner" id="banner" aria-live="polite"></div>
+    <nav class="tabs no-print" id="tabs" aria-label="Views"></nav>
+  </div>
+</header>
 
-  <main class="container">
-    <section class="toolbar" id="toolbar"></section>
-    <section class="kpi-grid" id="kpiGrid"></section>
+<main>
+  <div class="print-head"><h1>L2/L3 Support KPIs</h1><span id="print-meta"></span></div>
+  <div class="filters no-print" id="filters"></div>
+  <div class="chips no-print" id="chips"></div>
+  <div id="view"></div>
+</main>
 
-    <section class="card" id="domainSection" hidden>
-      <div class="card-head">
-        <div>
-          <h2>Domains</h2>
-          <p>Click a domain to drill into its applications. Dashed applications are in the support portfolio but had no tasks in this view.</p>
-        </div>
-        <div class="legend" id="statusLegend"></div>
-      </div>
-      <div class="domain-grid" id="domainGrid"></div>
-    </section>
-
-    <section class="chart-grid" id="chartGrid"></section>
-
-    <section class="card" style="margin-top:18px">
-      <div class="card-head">
-        <div>
-          <h2 id="breakdownTitle"></h2>
-          <p id="breakdownHint"></p>
-        </div>
-      </div>
-      <div class="table-wrap"><table id="breakdownTable"><thead></thead><tbody></tbody></table></div>
-    </section>
-
-    <section class="card" id="taskCard">
-      <div class="card-head">
-        <div>
-          <h2 id="taskDetailsTitle">Task Details</h2>
-          <p id="tableCount">0 tasks displayed</p>
-        </div>
-        <div class="actions">
-          <select id="pageSize" aria-label="Rows per page">
-            <option value="10">10 per page</option>
-            <option value="25">25 per page</option>
-            <option value="50">50 per page</option>
-            <option value="100000">Show all</option>
-          </select>
-          <button class="btn small ghost" id="exportTasksBtn" type="button">Export tasks CSV</button>
-          <button class="btn small" id="exportBtn" type="button">Export KPI summary CSV</button>
-        </div>
-      </div>
-      <div class="table-wrap"><table id="taskTable"><thead></thead><tbody></tbody></table></div>
-      <div class="pagination" id="tablePagination"></div>
-    </section>
-  </main>
-
-  <footer>
-    <p>L2/L3 KPI workspace. All file processing runs locally in your browser.</p>
-  </footer>
+<dialog id="dlg"></dialog>
 
 <script>
-const MODE = 'application'; // 'application' or 'domain'
-const EMBEDDED = {"fileName":"L2_L3_Tracker_September_2026.xlsx","sheets":{"TaskList":[{"TASK":"Resolve SEF WebApp batch deployment failure caused by stale XL Deploy CronJob record and deploy the related change to production","Type":"Change Request","Application":"Schedule Efficiency","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Line Ops","Ticket ID":""},{"TASK":"Stabilize SEF frontend, update application values, add a new page, and correct icon/button UI behavior","Type":"New Requirements","Application":"Schedule Efficiency","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed","Status":"Completed","Domain":"Line Ops","Ticket ID":""},{"TASK":"Coordinate UNIFEEDER service, port and terminal mappings; deploy UAT integration and obtain NOVA/C-Voyage validation","Type":"New Requirements","Application":"Schedule Efficiency","Date":"2026-09-29","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Pending","Domain":"Line Ops","Ticket ID":""},{"TASK":"Provision SEF UAT/PROD access and add operational users to UNIFEEDER UAT batch-log distribution","Type":"Access Needed","Application":"Schedule Efficiency","Date":"2026-09-25","POC":"Anthony","Shadowing":"Abed","Status":"Completed","Domain":"Line Ops","Ticket ID":""},{"TASK":"Update partner-code status in LARA from Under Validation to Compliant","Type":"Incident","Application":"Schedule Efficiency","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Requested","Domain":"Line Ops","Ticket ID":"INC2960953"},{"TASK":"Complete OneWay Container Tracking enhancement, LARA SQL business-rule updates, UAT validation and production deployment","Type":"New Requirements","Application":"OneWay","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Fix OneWay production tracking token-validation configuration and validate UAT, PRE and PROD","Type":"Incident","Application":"OneWay","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Migrate OneWay Partner and Location referential APIs from legacy B2B services to HIP and complete remaining access activities","Type":"New Requirements","Application":"OneWay","Date":"2026-09-30","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"In Progress","Domain":"Shipping","Ticket ID":""},{"TASK":"Update OneWay support process and access-request guidance for L3 support routing","Type":"New Requirements","Application":"OneWay","Date":"2026-09-08","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Build and test L2/L3 Tracker Copilot Studio automation proof of concept; review mailbox-folder configuration limitation","Type":"New Requirements","Application":"","Date":"2026-09-30","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"Pending","Domain":"","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation and retesting for Terminal Link","Type":"New Requirements","Application":"TERMINAL LINK","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"Communication","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation for OneWay","Type":"New Requirements","Application":"OneWay","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Completed","Domain":"Shipping","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation for TANGRAM website","Type":"New Requirements","Application":"TANGRAM","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"Communication","Ticket ID":""},{"TASK":"Coordinate security vulnerability remediation for CCIS website","Type":"New Requirements","Application":"CCIS","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"Communication","Ticket ID":""},{"TASK":"Coordinate CMA Fondation penetration-test retest and remaining remediation findings","Type":"New Requirements","Application":"","Date":"2026-09-30","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"","Ticket ID":"RITM3174135"},{"TASK":"Obtain complete certificate inventory and expiry schedule for applications in support scope from old and new PKI tools","Type":"Certificate","Application":"","Date":"2026-09-01","POC":"Abed","Shadowing":"Mantach","Status":"Pending","Domain":"","Ticket ID":""},{"TASK":"Coordinate certificate renewal activities for IDLEFULL environments","Type":"Certificate","Application":"IDLE","Date":"2026-09-30","POC":"Mantach","Shadowing":"Abed","Status":"In Progress","Domain":"Shipping","Ticket ID":"RITM3135093; RITM3135089; RITM3135084"},{"TASK":"Coordinate certificate renewals and validation for CMACGM-GROUP, Corporate Website, SAMIR, EXPLORE and OneWay","Type":"Certificate","Application":"","Date":"2026-09-30","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"In Progress","Domain":"","Ticket ID":""},{"TASK":"Complete vCards entity onboarding, production data loading, access guidance and joiner/leaver maintenance guidance","Type":"Access Needed","Application":"vCards","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed","Status":"Completed","Domain":"Merit","Ticket ID":""},{"TASK":"Assess EServiceDesk TLS compliance and define migration requirement from unsupported .NET 5 to .NET 8","Type":"New Requirements","Application":"","Date":"2026-09-07","POC":"Anthony","Shadowing":"Abed","Status":"Pending","Domain":"","Ticket ID":""},{"TASK":"Investigate Corporate Website unexpected high-load warnings on PROD web request service","Type":"Incident","Application":"Corporate Website","Date":"2026-09-11","POC":"Omar; Abbas","Shadowing":"","Status":"In Progress","Domain":"Communication","Ticket ID":""},{"TASK":"Perform Corporate Website PRE/PROD change scheduling and post-deployment SRE sanity checks","Type":"Change Request","Application":"Corporate Website","Date":"2026-09-10","POC":"Omar; Abbas","Shadowing":"","Status":"Completed","Domain":"Communication","Ticket ID":"CHG0274593; CHG0274902"},{"TASK":"Perform Better Ways landing-page PRE/PROD deployment checks and SRE validation","Type":"Change Request","Application":"Corporate Website","Date":"2026-09-17","POC":"Abbas","Shadowing":"Omar","Status":"Completed","Domain":"Communication","Ticket ID":"CHG0275753; CHG0275806"},{"TASK":"Perform SAMIR PRE/PROD release scheduling and post-deployment SRE sanity checks","Type":"Change Request","Application":"","Date":"2026-09-09","POC":"Omar","Shadowing":"Abbas","Status":"Completed","Domain":"","Ticket ID":"CHG0274718; CHG0274818"},{"TASK":"Validate SAMIR issue fix on PRE and PROD and close deployment change requests","Type":"Change Request","Application":"","Date":"2026-09-18","POC":"Abbas","Shadowing":"Omar","Status":"Completed","Domain":"","Ticket ID":"CHG0276279; CHG0276310"},{"TASK":"Perform EasyStow PRE/PROD deployment scheduling and SRE sanity checks","Type":"Change Request","Application":"","Date":"2026-09-14","POC":"Abbas","Shadowing":"Omar","Status":"Completed","Domain":"","Ticket ID":"CHG0275063; CHG0275369"},{"TASK":"Handle MyEUP critical service incidents generated by PagerDuty","Type":"Incident","Application":"MyEUP","Date":"2026-09-06","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"In Progress","Domain":"MyEUP","Ticket ID":"INC2936531; INC2936885"},{"TASK":"Handle MyEUP Temporary Department Switch termination workflow issue and requester follow-up","Type":"Incident","Application":"MyEUP","Date":"2026-09-18","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Pending","Domain":"MyEUP","Ticket ID":"INC2948616"},{"TASK":"Handle MyEUP production response-time degradation incident","Type":"Incident","Application":"MyEUP","Date":"2026-09-24","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"In Progress","Domain":"MyEUP","Ticket ID":"INC2954269"},{"TASK":"Investigate repeated Corporate Website DEV HTTP monitor outage alerts on 29 September","Type":"Incident","Application":"Corporate Website","Date":"2026-09-29","POC":"Omar; Abbas","Shadowing":"Abed; Anthony; Mantach","Status":"Requested","Domain":"Communication","Ticket ID":"INC2959824; INC2959829; INC2959848; INC2959853; INC2959857"},{"TASK":"Investigate repeated Corporate Website DEV HTTP monitor outage alerts on 30 September","Type":"Incident","Application":"Corporate Website","Date":"2026-09-30","POC":"Omar; Abbas","Shadowing":"Abed; Anthony; Mantach","Status":"Requested","Domain":"Communication","Ticket ID":"INC2960919; INC2960920; INC2960939; INC2960946; INC2960956"},{"TASK":"Remove Shipmanager access and retain Hook Local Ops access for requester","Type":"Access Needed","Application":"Hook","Date":"2026-09-30","POC":"Anthony","Shadowing":"Abed; Mantach","Status":"Requested","Domain":"Line Ops","Ticket ID":"SCTASK3498579"},{"TASK":"Deploy CCIS CMS translation-status and sitemap fixes to PRE and complete change-ticket closure","Type":"Change Request","Application":"CCIS","Date":"2026-09-22","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Pending","Domain":"Communication","Ticket ID":"CHG0276194"},{"TASK":"Review and approve CCIS CMS production deployment for translation-status and sitemap fixes","Type":"Change Request","Application":"CCIS","Date":"2026-09-30","POC":"Abed","Shadowing":"Anthony; Mantach","Status":"Requested","Domain":"Communication","Ticket ID":"CHG0277924"},{"TASK":"Complete CCIS accessibility enhancement PRE/PROD change activities","Type":"Change Request","Application":"CCIS","Date":"2026-09-03","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Completed","Domain":"Communication","Ticket ID":"CHG0274069; CHG0274251"},{"TASK":"Complete Corporate Website Rise in Motion migration change and update ticket closure status","Type":"Change Request","Application":"Corporate Website","Date":"2026-09-25","POC":"Mantach","Shadowing":"Abed; Anthony","Status":"Pending","Domain":"Communication","Ticket ID":"CHG0277190"},{"TASK":"Apply Customer Agent Assistant hotfix to PRE and update change closure status","Type":"Change Request","Application":"","Date":"2026-09-21","POC":"Mantach","Shadowing":"","Status":"Pending","Domain":"","Ticket ID":"CHG0276180"},{"TASK":"Confirm SEF production deployment completion","Type":"Change Request","Application":"Schedule Efficiency","Date":"2026-09-22","POC":"Anthony","Shadowing":"Omar","Status":"Completed","Domain":"Line Ops","Ticket ID":"CHG0276074"}],"AppDomain":[{"Application":"OneWay","Domain":"Shipping"},{"Application":"ORCA","Domain":"Regions"},{"Application":"GBS","Domain":"Regions"},{"Application":"IRIS","Domain":"Line Ops"},{"Application":"Hook","Domain":"Line Ops"},{"Application":"SPARKS","Domain":"Tangram"},{"Application":"Corporate Website","Domain":"Communication"},{"Application":"vCards","Domain":"Merit"},{"Application":"Self-Service Kiosk","Domain":"Regions"},{"Application":"Schedule Efficiency","Domain":"Line Ops"},{"Application":"Horizons","Domain":"Communication"},{"Application":"Explore","Domain":"Tangram"},{"Application":"iStock","Domain":"Shipping"},{"Application":"Projectory","Domain":"Internal"},{"Application":"CMA SHIPS","Domain":"Communication"},{"Application":"TERMINAL LINK","Domain":"Communication"},{"Application":"OUR PURPOSE","Domain":"Communication"},{"Application":"TANGRAM","Domain":"Communication"},{"Application":"CCIS","Domain":"Communication"},{"Application":"IDLE","Domain":"Shipping"},{"Application":"MyEUP","Domain":"MyEUP"}]}};
-const DOMAIN_FIRST = MODE === 'domain';
-const NONE = 'Unassigned';
-const $ = id => document.getElementById(id);
+'use strict';
+/* ========================================================================= */
+/* CONFIG                                                                    */
+/* ========================================================================= */
+const C = window.TrackerCore;
+const CFG = C.CONFIG;
+// To make ticket IDs clickable, set this (or CFG.serviceNowBaseUrl in core.js):
+// CFG.serviceNowBaseUrl = 'https://<instance>.service-now.com';
 
-const columnAliases = {
-  task: ['task', 'title', 'subject', 'description'],
-  type: ['type', 'category', 'work type'],
-  application: ['application', 'app', 'system', 'platform'],
-  domain: ['domain', 'service line', 'tower', 'segment', 'area'],
-  date: ['date', 'created', 'creation date', 'start date'],
-  poc: ['poc', 'owner', 'lead', 'assignee', 'responsible'],
-  shadowing: ['shadowing', 'backup', 'watcher'],
-  status: ['status', 'state', 'progress'],
-  ticket: ['ticket id', 'ticket', 'reference']
+const LIBS = {
+  // Vendored copies come first (run `npm run vendor`). The pinned CDN fallback keeps the page usable
+  // before vendoring; set allowCdnFallback to false for strict no-CDN deployments.
+  allowCdnFallback: true,
+  xlsx: { global: 'XLSX', local: 'vendor/xlsx.full.min.js', cdn: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js' },
+  chart: { global: 'Chart', local: 'vendor/chart.umd.js', cdn: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js' },
 };
-const BUCKETS = ['Done', 'Active', 'Open', 'Other'];
-const BUCKET_COLOR = { Done: '#1f8f4c', Active: '#cf8d18', Open: '#c92a2a', Other: '#8593a8' };
-const PALETTE = ['#0b2f6b', '#dc2128', '#0f5fb8', '#0a7c75', '#cf8d18', '#53627a', '#7a4fa3', '#6980a4'];
-const FILTERS = [
-  { key: 'domain', label: 'Domain', get: r => [r.domain] },
-  { key: 'app', label: 'Application', get: r => [r.app] },
-  { key: 'status', label: 'Status', get: r => [r.bucket] },
-  { key: 'type', label: 'Type', get: r => [r.type] },
-  { key: 'poc', label: 'POC', get: r => r.pocs }
+const VIEWS = [
+  { id: 'overview', label: 'Overview' }, { id: 'domain', label: 'Domains' }, { id: 'application', label: 'Applications' },
+  { id: 'team', label: 'Team' }, { id: 'trends', label: 'Trends' }, { id: 'quality', label: 'Data quality' }, { id: 'print', label: 'Print' },
+];
+const FILTER_KEYS = ['domain', 'app', 'status', 'type', 'person', 'q', 'qc'];
+const STATUS_COLOR = { Requested: '--s-requested', Pending: '--s-pending', 'In Progress': '--s-progress', Done: '--s-done', Unknown: '--s-unknown' };
+const KPI_CARDS = [
+  { key: 'total', label: 'Total tasks' },
+  { key: 'done', label: 'Done' },
+  { key: 'open', label: 'Open' },
+  { key: 'completionRate', label: 'Completion rate', fmt: 'pct' },
+  { key: 'openIssues', label: 'Open issues', sub: k => `(${k.issues} total)` },
+  { key: 'deployments', label: 'Deployments done' },
+  { key: 'pipeline', label: 'Changes in pipeline' },
+  { key: 'avgAge', label: 'Avg age of open work', fmt: 'days' },
+  { key: 'activeApps', label: 'Active applications', sub: k => `of ${k.totalApps}` + (k.unmappedActive ? `, +${k.unmappedActive} unmapped` : '') },
 ];
 
-let book = null;          // { fileName, sheets: { name: [rowObjects] } }
-let rows = [];
-let headers = [];
-let cols = {};
-let portfolio = new Map(); // domain -> Set(applications) from the mapping sheet
-let appToDomain = new Map();
-let charts = {};
-let currentPage = 1;
-let pageSize = 10;
-let sort = null;
-let collapsed = new Set();
-const filter = { domain: 'all', app: 'all', status: 'all', type: 'all', poc: 'all' };
+/* ========================================================================= */
+/* STATE                                                                     */
+/* ========================================================================= */
+const state = {
+  view: 'overview', period: null, filters: {}, sort: { key: 'age', dir: -1 },
+  periods: [],      // [{period, shared:{fileName,publishedAt,tasks}|null, local:{...}|null}]
+  local: new Map(), // period → IndexedDB record
+  cache: new Map(), // period → {ds, snap, isLocal, stamp}
+  idbOk: true, notice: '',
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const todayYMD = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); };
+const fmtNum = (v, fmt) => v == null ? '–' : fmt === 'pct' ? v.toFixed(1) + '%' : fmt === 'days' ? v.toFixed(1) + ' d' : Math.round(v).toLocaleString('en-GB');
+function toast(msg, ms = 3200) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), ms); }
 
-/* ---------- Page chrome ---------- */
-$('pageTitle').textContent = DOMAIN_FIRST ? 'L2/L3 Domain KPI Dashboard' : 'L2/L3 Operational KPI Dashboard';
-$('pageSubtitle').textContent = DOMAIN_FIRST
-  ? 'Execution quality, backlog health and issue pressure by business domain, then by the applications inside each domain.'
-  : 'Monitor execution quality, backlog health, issue pressure, and delivery performance across L2/L3 support streams.';
-$(DOMAIN_FIRST ? 'navDomain' : 'navApp').classList.add('current');
-$('domainSection').hidden = !DOMAIN_FIRST;
-$('statusLegend').innerHTML = BUCKETS.slice(0, 3).map(b => `<span><i style="background:${BUCKET_COLOR[b]}"></i>${b}</span>`).join('');
-
-(function buildToolbar() {
-  const order = DOMAIN_FIRST ? ['domain', 'app', 'status', 'type', 'poc'] : ['status', 'app', 'domain', 'type', 'poc'];
-  const lead = DOMAIN_FIRST ? 'domain' : '';
-  $('toolbar').innerHTML =
-    `<div><label for="sheetSelect">Sheet</label><select id="sheetSelect" disabled></select></div>` +
-    order.map(k => {
-      const f = FILTERS.find(x => x.key === k);
-      return `<div class="${k === lead ? 'lead' : ''}"><label for="f_${k}">${f.label}</label><select id="f_${k}"><option value="all">All</option></select></div>`;
-    }).join('') +
-    `<div><label for="searchBox">Search</label><input id="searchBox" type="search" placeholder="Search task, POC, ticket..." /></div>` +
-    `<button class="btn" id="resetBtn" type="button">Reset filters</button>`;
-  FILTERS.forEach(f => $('f_' + f.key).addEventListener('change', e => setFilter(f.key, e.target.value, true)));
-  $('searchBox').addEventListener('input', () => { currentPage = 1; render(); });
-  $('resetBtn').addEventListener('click', resetFilters);
-  $('sheetSelect').addEventListener('change', e => loadSheet(e.target.value));
-})();
-
-(function buildChartGrid() {
-  const defs = DOMAIN_FIRST ? [
-    ['domainChart', 'Tasks by Domain', 'Stacked by status. Click a bar to filter.'],
-    ['applicationChart', 'Applications', 'Click a bar to filter.'],
-    ['typeChart', 'Task Type by Domain', 'What kind of work each domain generates.'],
-    ['statusChart', 'Status Distribution', 'Click a slice to filter.'],
-    ['pocChart', 'Workload by POC', 'Shared tasks count once for each POC.'],
-    ['weekChart', 'Weekly Activity', 'Tasks by week of the Date column.']
-  ] : [
-    ['statusChart', 'Status Distribution', 'Click a slice to filter.'],
-    ['applicationChart', 'Application Breakdown', 'Stacked by status. Click a bar to filter.'],
-    ['typeChart', 'Task Type Mix', 'Click a slice to filter.'],
-    ['domainChart', 'Domain KPI', 'Stacked by status. Click a bar to filter.'],
-    ['pocChart', 'Workload by POC', 'Shared tasks count once for each POC.'],
-    ['weekChart', 'Weekly Activity', 'Tasks by week of the Date column.']
-  ];
-  $('chartGrid').innerHTML = defs.map(([id, title, hint]) =>
-    `<article class="card"><div class="card-head"><div><h2 id="${id}Title">${title}</h2><p>${hint}</p></div></div><div class="chart-box"><canvas id="${id}"></canvas></div></article>`).join('');
-})();
-
-$('fileInput').addEventListener('change', handleFileUpload);
-$('exportBtn').addEventListener('click', exportSummaryCsv);
-$('exportTasksBtn').addEventListener('click', exportTasksCsv);
-$('pageSize').addEventListener('change', e => { pageSize = Number(e.target.value); currentPage = 1; render(); });
-
-/* ---------- Loading ---------- */
-function handleFileUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  if (typeof XLSX === 'undefined') { $('fileStatus').textContent = 'The Excel reader could not be loaded (no network access to the CDN).'; return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
-    const sheets = {};
-    wb.SheetNames.forEach(name => { sheets[name] = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false, dateNF: 'yyyy-mm-dd' }); });
-    loadBook({ fileName: file.name, sheets }, false);
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function loadBook(b, embedded) {
-  book = b;
-  portfolio = new Map();
-  appToDomain = new Map();
-  const taskSheets = [];
-  Object.entries(book.sheets).forEach(([name, data]) => {
-    if (!data.length) return;
-    const keys = Object.keys(data[0]).map(k => k.trim().toLowerCase()).sort().join('|');
-    if (keys === 'application|domain') readMapping(data);
-    else taskSheets.push(name);
+/* ========================================================================= */
+/* LIBRARIES                                                                 */
+/* ========================================================================= */
+const scriptCache = new Map();
+function loadScript(src) {
+  if (scriptCache.has(src)) return scriptCache.get(src);
+  const p = new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = src; s.onload = () => res(); s.onerror = () => { scriptCache.delete(src); s.remove(); rej(new Error('Could not load ' + src)); };
+    document.head.append(s);
   });
-  const sel = $('sheetSelect');
-  sel.innerHTML = taskSheets.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  sel.disabled = taskSheets.length < 2;
-  book.embedded = embedded;
-  if (taskSheets.length) loadSheet(taskSheets[0]);
-  else $('fileStatus').textContent = `${book.fileName}: no task sheet found.`;
+  scriptCache.set(src, p); return p;
+}
+async function ensureLib(lib) {
+  if (window[lib.global]) return window[lib.global];
+  try { await loadScript(lib.local); } catch (e) { /* fall through */ }
+  if (!window[lib.global] && LIBS.allowCdnFallback) { try { await loadScript(lib.cdn); } catch (e) { /* fall through */ } }
+  return window[lib.global] || null;
 }
 
-function readMapping(data) {
-  data.forEach(r => {
-    const clean = normalizeRow(r);
-    const key = k => Object.keys(clean).find(h => h.toLowerCase() === k);
-    const app = String(clean[key('application')] || '').trim();
-    const dom = String(clean[key('domain')] || '').trim();
-    if (!app || !dom) return;
-    appToDomain.set(app.toLowerCase(), dom);
-    if (!portfolio.has(dom)) portfolio.set(dom, new Set());
-    portfolio.get(dom).add(app);
-  });
-}
+/* ========================================================================= */
+/* PERSISTENCE (IndexedDB; local uploads only, never the shared snapshot)    */
+/* ========================================================================= */
+const IDB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      if (!('indexedDB' in window)) return rej(new Error('IndexedDB unavailable'));
+      const r = indexedDB.open('l2l3-kpi', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('uploads', { keyPath: 'period' });
+      r.onsuccess = () => { this.db = r.result; res(); }; r.onerror = () => rej(r.error);
+    });
+  },
+  tx(mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction('uploads', mode); const st = t.objectStore('uploads');
+      const out = fn(st); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error);
+    });
+  },
+  all() { return this.tx('readonly', s => s.getAll()); },
+  put(rec) { return this.tx('readwrite', s => s.put(rec)); },
+  clear() { return this.tx('readwrite', s => s.clear()); },
+};
 
-function loadSheet(name) {
-  const raw = book.sheets[name].map(normalizeRow);
-  headers = Array.from(new Set(raw.flatMap(r => Object.keys(r))));
-  cols = {};
-  Object.keys(columnAliases).forEach(k => { cols[k] = findColumn(k); });
-  const val = (r, k) => cols[k] ? String(r[cols[k]] ?? '').trim() : '';
-  const split = s => s.split(/[;,\/]/).map(x => x.trim()).filter(Boolean);
-  rows = raw.map(r => {
-    const app = val(r, 'application') || NONE;
-    const domain = val(r, 'domain') || appToDomain.get(app.toLowerCase()) || NONE;
-    const status = val(r, 'status');
-    const row = {
-      raw: r, task: val(r, 'task'), type: val(r, 'type') || 'Unspecified', app, domain, status,
-      bucket: statusBucket(status), date: parseDate(val(r, 'date')),
-      pocs: split(val(r, 'poc')), tickets: split(val(r, 'ticket'))
-    };
-    if (!row.pocs.length) row.pocs = [NONE];
-    const text = `${row.task} ${row.type}`.toLowerCase();
-    row.issue = row.bucket !== 'Done' && /(incident|issue|bug|block|risk|security|vulnerab|remediation|outage|degradation|failure)/.test(text);
-    row.deploy = /(deploy|go-live|golive|release|hotfix|change request)/.test(text);
-    row.haystack = (Object.values(r).join(' ') + ' ' + domain + ' ' + app).toLowerCase();
-    return row;
-  });
-  Object.keys(filter).forEach(k => { filter[k] = 'all'; });
-  $('searchBox').value = '';
-  sort = null;
-  collapsed = new Set();
-  currentPage = 1;
-  $('fileStatus').textContent = book.embedded
-    ? `Showing ${book.fileName} (built-in snapshot, ${rows.length} tasks). Upload a newer tracker to replace it.`
-    : `${book.fileName} loaded: ${rows.length} tasks from sheet "${name}".`;
-  render();
-}
-
-function normalizeRow(row) {
-  const clean = {};
-  Object.entries(row).forEach(([k, v]) => { clean[String(k).trim()] = typeof v === 'string' ? v.trim() : v; });
-  return clean;
-}
-
-function findColumn(aliasKey) {
-  const hs = headers.map(h => ({ original: h, normalized: h.toLowerCase().trim() }));
-  for (const alias of columnAliases[aliasKey]) { const m = hs.find(h => h.normalized === alias); if (m) return m.original; }
-  for (const alias of columnAliases[aliasKey]) { const m = hs.find(h => h.normalized.includes(alias)); if (m) return m.original; }
-  return null;
-}
-
-function statusBucket(status) {
-  const s = status.toLowerCase();
-  if (!s) return 'Other';
-  if (/(not started|to do|todo)/.test(s)) return 'Open';
-  if (/(done|delivered|closed|complete|resolved|deployed|go-live|golive)/.test(s)) return 'Done';
-  if (/(progress|active|ongoing|wip|started)/.test(s)) return 'Active';
-  if (/(open|pending|blocked|waiting|requested|new|hold)/.test(s)) return 'Open';
-  return 'Other';
-}
-
-function parseDate(value) {
-  if (!value) return null;
-  const p = String(value).match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (p) return new Date(Number(p[1]), Number(p[2]) - 1, Number(p[3]));
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-/* ---------- Filtering ---------- */
-function setFilter(key, value, fromSelect) {
-  filter[key] = (!fromSelect && filter[key] === value) ? 'all' : value; // chart clicks toggle
-  if (key === 'domain' && filter.app !== 'all' && filter.domain !== 'all' &&
-      !rows.some(r => r.domain === filter.domain && r.app === filter.app)) filter.app = 'all';
-  currentPage = 1;
-  render();
-}
-
-function resetFilters() {
-  Object.keys(filter).forEach(k => { filter[k] = 'all'; });
-  $('searchBox').value = '';
-  currentPage = 1;
-  render();
-}
-
-function filteredRows(ignoreKey) {
-  const search = $('searchBox').value.toLowerCase().trim();
-  return rows.filter(r =>
-    FILTERS.every(f => f.key === ignoreKey || filter[f.key] === 'all' || f.get(r).includes(filter[f.key])) &&
-    (!search || r.haystack.includes(search)));
-}
-
-function populateFilters() {
-  FILTERS.forEach(f => {
-    // Applications are narrowed to the selected domain so the two filters cascade.
-    const source = f.key === 'app' && filter.domain !== 'all' ? rows.filter(r => r.domain === filter.domain) : rows;
-    let options = Array.from(new Set(source.flatMap(f.get))).sort((a, b) => (a === NONE) - (b === NONE) || a.localeCompare(b));
-    if (f.key === 'status') options = BUCKETS.filter(b => options.includes(b));
-    const sel = $('f_' + f.key);
-    sel.innerHTML = '<option value="all">All</option>' + options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
-    sel.value = filter[f.key];
-  });
-}
-
-/* ---------- Aggregation ---------- */
-function stats(list) {
-  const s = { total: list.length, Done: 0, Active: 0, Open: 0, Other: 0, issues: 0, deploys: 0 };
-  list.forEach(r => { s[r.bucket]++; if (r.issue) s.issues++; if (r.deploy) s.deploys++; });
-  s.rate = s.total ? s.Done / s.total : 0;
-  return s;
-}
-function groupBy(list, fn) {
+/* ========================================================================= */
+/* DATA SOURCES                                                              */
+/* ========================================================================= */
+function sharedEntries() {
   const m = new Map();
-  list.forEach(r => { const k = fn(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+  for (const e of window.TRACKER_HISTORY_INDEX || []) m.set(e.period, { fileName: e.fileName, publishedAt: e.publishedAt, tasks: e.tasks });
+  const s = window.TRACKER_SNAPSHOT;
+  if (s && s.period) m.set(s.period, { fileName: s.fileName, publishedAt: s.publishedAt, latest: true });
   return m;
 }
-const byVolume = (a, b) => (a[0] === NONE) - (b[0] === NONE) || b[1].length - a[1].length || a[0].localeCompare(b[0]);
+function buildPeriods() {
+  const shared = sharedEntries();
+  const all = new Set([...shared.keys(), ...state.local.keys()]);
+  state.periods = [...all].map(p => {
+    const sh = shared.get(p) || null, lo = state.local.get(p) || null;
+    const useLocal = !!lo && (!sh || String(lo.uploadedAt) > String(sh.publishedAt || ''));
+    return { period: p, shared: sh, local: lo, useLocal };
+  }).sort((a, b) => b.period.localeCompare(a.period));
+}
+const periodInfo = p => state.periods.find(x => x.period === p);
+async function loadSnap(p) {
+  const info = periodInfo(p);
+  if (!info) return null;
+  if (info.useLocal) return { snap: info.local, isLocal: true, stamp: info.local.uploadedAt };
+  const s = window.TRACKER_SNAPSHOT;
+  if (s && s.period === p) return { snap: s, isLocal: false, stamp: s.publishedAt };
+  window.TRACKER_HISTORY = window.TRACKER_HISTORY || {};
+  if (!window.TRACKER_HISTORY[p]) await loadScript(`data/history/${p}.js`); // script injection keeps file:// working
+  const h = window.TRACKER_HISTORY[p];
+  return h ? { snap: h, isLocal: false, stamp: h.publishedAt } : null;
+}
+async function getDataset(p) {
+  if (state.cache.has(p)) return state.cache.get(p);
+  const src = await loadSnap(p).catch(() => null);
+  if (!src) return null;
+  const ds = C.normalize(src.snap.sheets);
+  C.applyAges(ds.tasks, C.refDateFor(p, todayYMD()));
+  const entry = { ds, ...src };
+  state.cache.set(p, entry);
+  return entry;
+}
+const prevPeriod = p => { const list = state.periods.map(x => x.period).sort(); const i = list.indexOf(p); return i > 0 ? list[i - 1] : null; };
 
-/* ---------- Render ---------- */
-function render() {
-  populateFilters();
-  const list = filteredRows();
-  renderKpis(list);
-  if (DOMAIN_FIRST) renderDomainCards();
-  renderCharts(list);
-  renderBreakdown(list);
-  renderTable(list);
+/* ========================================================================= */
+/* ROUTING (#view?key=value…)                                                */
+/* ========================================================================= */
+function parseHash() {
+  const raw = location.hash.slice(1), qi = raw.indexOf('?');
+  const v = decodeURIComponent(qi < 0 ? raw : raw.slice(0, qi)), qs = qi < 0 ? '' : raw.slice(qi + 1);
+  const params = new URLSearchParams(qs || '');
+  const filters = {};
+  FILTER_KEYS.forEach(k => { if (params.get(k)) filters[k] = params.get(k); });
+  return { view: VIEWS.some(x => x.id === v) ? v : 'overview', filters, period: params.get('period') || null };
+}
+function buildHash(s) {
+  const p = new URLSearchParams();
+  FILTER_KEYS.forEach(k => { if (s.filters[k]) p.set(k, s.filters[k]); });
+  if (s.period && s.period !== (state.periods[0] || {}).period) p.set('period', s.period);
+  const q = p.toString();
+  return '#' + s.view + (q ? '?' + q : '');
+}
+function go(patch, { replace = false } = {}) {
+  const next = { view: patch.view || state.view, period: 'period' in patch ? patch.period : state.period,
+    filters: 'filters' in patch ? patch.filters : { ...state.filters, ...(patch.filter || {}) } };
+  Object.keys(next.filters).forEach(k => { if (!next.filters[k]) delete next.filters[k]; });
+  const h = buildHash(next);
+  if (h === location.hash) return render();
+  if (replace) { history.replaceState(null, '', h); render(); } else location.hash = h; // hashchange → render
+}
+window.addEventListener('hashchange', () => render());
+
+/* ========================================================================= */
+/* RENDER                                                                    */
+/* ========================================================================= */
+let renderSeq = 0;
+async function render() {
+  const seq = ++renderSeq;
+  const h = parseHash();
+  state.view = h.view; state.filters = h.filters; state.notice = '';
+  const avail = state.periods.map(x => x.period);
+  if (h.period && !avail.includes(h.period)) state.notice = `${C.periodLabel(h.period)} isn't published here; showing the latest month instead.`;
+  state.period = h.period && avail.includes(h.period) ? h.period : (avail[0] || null);
+
+  renderTabs(); renderPeriodSelect();
+  const view = $('#view');
+  if (!state.period) { renderBanner(null); $('#filters').innerHTML = ''; $('#chips').innerHTML = ''; destroyCharts(); view.innerHTML = emptyState(); return; }
+
+  const cur = await getDataset(state.period);
+  if (seq !== renderSeq) return;
+  if (!cur) { renderBanner(null); destroyCharts(); view.innerHTML = `<div class="empty"><h2>Couldn't load ${esc(C.periodLabel(state.period))}</h2><p class="muted">data/history/${esc(state.period)}.js is missing. Pick another month or upload the tracker.</p></div>`; return; }
+  const prevP = prevPeriod(state.period);
+  const prev = prevP ? await getDataset(prevP) : null;
+  if (seq !== renderSeq) return;
+
+  renderBanner(cur); renderFilters(cur.ds); renderChips(cur.ds);
+  const ctx = makeCtx(cur, prev, prevP);
+  lastCtx = ctx;
+  destroyCharts();
+  document.body.dataset.view = state.view;
+  const V = { overview: viewOverview, domain: viewDomain, application: viewApplication, team: viewTeam, trends: viewTrends, quality: viewQuality, print: viewPrint }[state.view];
+  await V(view, ctx, seq);
+}
+function makeCtx(cur, prev, prevP) {
+  const filters = state.filters;
+  const list = C.applyFilters(cur.ds.tasks, filters, cur.ds);
+  const agg = C.aggregate(list, cur.ds);
+  let prevAgg = null;
+  if (prev) { const { qc, ...pf } = filters; prevAgg = C.aggregate(C.applyFilters(prev.ds.tasks, pf, prev.ds), prev.ds); }
+  return { cur, ds: cur.ds, list, agg, prevAgg, prevP };
 }
 
-function renderKpis(list) {
-  const s = stats(list);
-  const domains = new Set(list.filter(r => r.domain !== NONE).map(r => r.domain));
-  const apps = new Set(list.filter(r => r.app !== NONE).map(r => r.app));
-  const allApps = new Set([...appToDomain.keys(), ...rows.filter(r => r.app !== NONE).map(r => r.app.toLowerCase())]);
-  const allDomains = new Set([...portfolio.keys(), ...rows.filter(r => r.domain !== NONE).map(r => r.domain)]);
-  const unassigned = list.filter(r => r.domain === NONE).length;
-  const tickets = new Set(list.flatMap(r => r.tickets)).size;
-  const card = (cls, label, value, note) => `<article class="kpi-card ${cls}"><span>${label}</span><strong>${value}</strong><em>${note}</em></article>`;
-  const core = [
-    card('primary', 'Total Tasks', s.total, 'Tasks matching the current filters'),
-    card('success', 'Done', s.Done, 'Completed / delivered / closed'),
-    card('warning', 'Open / Active', s.Open + s.Active, `${s.Active} in progress, ${s.Open} pending or requested`),
-    card('info', 'Completion Rate', pct(s.rate), 'Done ÷ total tasks'),
-    card('danger', 'Open Issues', s.issues, 'Unfinished incidents, security and remediation work'),
-    card('accent', 'Deployments', s.deploys, 'Deployment, release and change-request tasks')
-  ];
-  const domainCard = card('teal', 'Active Domains', `${domains.size} <small>of ${allDomains.size}</small>`, `${unassigned} task${unassigned === 1 ? '' : 's'} with no domain`);
-  const appCard = card('neutral', 'Active Applications', `${apps.size} <small>of ${allApps.size}</small>`, 'Applications with at least one task');
-  const ticketCard = card('neutral', 'Tickets Linked', tickets, `${list.filter(r => !r.tickets.length).length} tasks without a ticket ID`);
-  $('kpiGrid').innerHTML = (DOMAIN_FIRST ? [domainCard, appCard, ...core] : [...core, appCard, ticketCard]).join('');
+function renderTabs() {
+  $('#tabs').innerHTML = VIEWS.map(v => `<a class="tab" href="${esc(buildHash({ view: v.id, filters: state.filters, period: state.period }))}" ${v.id === state.view ? 'aria-current="page"' : ''}>${v.label}</a>`).join('');
+}
+function renderPeriodSelect() {
+  const sel = $('#period');
+  sel.innerHTML = state.periods.length ? state.periods.map(p => `<option value="${p.period}" ${p.period === state.period ? 'selected' : ''}>${esc(C.periodLabel(p.period))}${p.useLocal ? ' (local)' : ''}</option>`).join('') : '<option>No data yet</option>';
+  sel.disabled = !state.periods.length;
+}
+function renderBanner(cur) {
+  const b = $('#banner');
+  const parts = [];
+  if (cur) {
+    const s = cur.snap, n = cur.ds.tasks.length;
+    parts.push(`<span>Showing ${esc(s.fileName)} · ${esc(C.periodLabel(state.period))} · ${cur.isLocal ? 'uploaded' : 'published'} ${esc(fmtDate(cur.stamp))} · ${n} tasks</span>`);
+    if (cur.isLocal) parts.push('<span class="badge badge-local">Local preview – not published</span>');
+    const w = cur.ds.quality.warningCount;
+    if (w) parts.push(`<a class="badge badge-warn no-print" href="${esc(buildHash({ view: 'quality', filters: {}, period: state.period }))}">${w} data warning${w === 1 ? '' : 's'}</a>`);
+    $('#print-meta').textContent = `${C.periodLabel(state.period)} · ${s.fileName} · ${n} tasks`;
+  } else parts.push('<span>No tracker loaded</span>');
+  if (state.notice) parts.push(`<span class="notice">${esc(state.notice)}</span>`);
+  if (!state.idbOk) parts.push('<span class="notice">This browser blocks local storage here: uploads last until you close the page.</span>');
+  b.innerHTML = parts.join('');
+  $('#btn-publish').disabled = !cur; $('#btn-print').disabled = !cur;
+}
+function renderFilters(ds) {
+  if (state.view === 'print') { $('#filters').innerHTML = ''; return; }
+  const f = state.filters;
+  const uniq = arr => [...new Set(arr)].sort((a, b) => a.localeCompare(b));
+  const domains = uniq(ds.tasks.map(t => t.domain));
+  const apps = uniq(ds.tasks.filter(t => !f.domain || C.normKey(t.domain) === C.normKey(f.domain)).map(t => t.app));
+  const types = uniq(ds.tasks.map(t => t.type).filter(Boolean));
+  const people = new Map();
+  ds.tasks.forEach(t => [...t.poc, ...t.shadow].forEach(p => people.set(p.key, ds.people.displayName(p.key))));
+  const opt = (vals, cur, all) => `<option value="">${all}</option>` + vals.map(v => { const [val, lab] = Array.isArray(v) ? v : [v, v]; return `<option value="${esc(val)}" ${C.normKey(val) === C.normKey(cur) ? 'selected' : ''}>${esc(lab)}</option>`; }).join('');
+  $('#filters').innerHTML = `
+    <label>Domain<select data-f="domain">${opt(domains, f.domain, 'All domains')}</select></label>
+    <label>Application<select data-f="app">${opt(apps, f.app, 'All applications')}</select></label>
+    <label>Status<select data-f="status">${opt([['Open', 'Open (not done)'], ...CFG.bucketOrder.map(b => [b, b])], f.status, 'All statuses')}</select></label>
+    <label>Type<select data-f="type">${opt(types, f.type, 'All types')}</select></label>
+    <label>Person<select data-f="person">${opt([...people.entries()].sort((a, b) => a[1].localeCompare(b[1])), f.person, 'Everyone')}</select></label>
+    <label>Search<input data-f="q" type="search" value="${esc(f.q || '')}" placeholder="Task, ticket, name…"></label>`;
+}
+function renderChips(ds) {
+  const f = state.filters, chips = [];
+  if (f.qc) { const c = ds.quality.checks.find(x => x.id === f.qc); chips.push(['qc', 'Data quality: ' + (c ? c.label : f.qc)]); }
+  if (f.person) chips.push(['person', 'Person: ' + ds.people.displayName(f.person)]);
+  const any = FILTER_KEYS.some(k => f[k]);
+  $('#chips').innerHTML = chips.map(([k, l]) => `<span class="chip">${esc(l)}<button type="button" data-unchip="${k}" aria-label="Remove filter">×</button></span>`).join('') +
+    (any ? '<button class="btn btn-line" type="button" data-clear-filters style="padding:2px 10px;font-size:.82rem">Clear filters</button>' : '');
+}
+$('#filters').addEventListener('change', e => { const k = e.target.dataset.f; if (k && k !== 'q') go({ filter: { [k]: e.target.value, ...(k === 'domain' ? { app: '' } : {}) } }); });
+let qTimer;
+$('#filters').addEventListener('input', e => { if (e.target.dataset.f !== 'q') return; clearTimeout(qTimer); qTimer = setTimeout(() => go({ filter: { q: e.target.value } }, { replace: true }), 300); });
+$('#chips').addEventListener('click', e => {
+  if (e.target.dataset.unchip) go({ filter: { [e.target.dataset.unchip]: '' } });
+  if (e.target.closest('[data-clear-filters]')) go({ filters: {} });
+});
+$('#period').addEventListener('change', e => go({ period: e.target.value }));
+
+function emptyState() {
+  return `<div class="empty"><h2>No tracker published yet</h2>
+    <p class="muted">Upload this month's “L2_L3_Tracker - &lt;Month&gt; &lt;Year&gt;.xlsx” to preview it here, or drop the file anywhere on the page.</p>
+    <p><button class="btn btn-primary" type="button" onclick="document.getElementById('file').click()">Upload tracker</button></p></div>`;
 }
 
-function miniBar(s) {
-  if (!s.total) return '<div class="bar"></div>';
-  return '<div class="bar">' + BUCKETS.filter(b => s[b]).map(b =>
-    `<i class="b-${b.toLowerCase()}" style="width:${(s[b] / s.total) * 100}%" title="${b}: ${s[b]}"></i>`).join('') + '</div>';
-}
-
-function renderDomainCards() {
-  // Cards ignore the domain filter itself so the other domains stay visible for comparison.
-  const groups = groupBy(filteredRows('domain'), r => r.domain);
-  const narrowed = FILTERS.some(f => f.key !== 'domain' && filter[f.key] !== 'all') || $('searchBox').value.trim();
-  const entries = [...groups.entries()].sort(byVolume);
-  if (!narrowed) portfolio.forEach((_, d) => { if (!groups.has(d)) entries.push([d, []]); });
-  $('domainGrid').innerHTML = entries.map(([domain, list]) => {
-    const s = stats(list);
-    const appGroups = [...groupBy(list, r => r.app).entries()].sort(byVolume);
-    const active = new Set(appGroups.map(([a]) => a.toLowerCase()));
-    const idleApps = narrowed ? [] : [...(portfolio.get(domain) || [])].filter(a => !active.has(a.toLowerCase()));
-    const chips = appGroups.map(([a, l]) => `<span class="chip">${esc(a)} · ${l.length}</span>`).join('') +
-      idleApps.map(a => `<span class="chip zero">${esc(a)}</span>`).join('');
-    if (!s.total) {
-      return `<div class="domain-card idle"><div class="dc-top"><span class="dc-name">${esc(domain)}</span><span class="dc-total">0 <small>tasks</small></span></div>
-        <div class="dc-meta">No activity in this period</div><div class="chips">${chips}</div></div>`;
+/* ---------- shared fragments ---------- */
+function kpiCards(k, pk) {
+  return `<div class="kpis">${KPI_CARDS.map(c => {
+    const v = k[c.key];
+    let d = '';
+    if (pk && v != null && pk[c.key] != null) {
+      const diff = v - pk[c.key], dir = CFG.kpiDirection[c.key] || 'neutral';
+      const cls = Math.abs(diff) < 1e-9 || dir === 'neutral' ? 'neutral' : (diff > 0) === (dir === 'up') ? 'good' : 'bad';
+      const amt = c.fmt === 'pct' ? Math.abs(diff).toFixed(1) + ' pp' : c.fmt === 'days' ? Math.abs(diff).toFixed(1) + ' d' : Math.abs(Math.round(diff));
+      d = `<div class="d ${cls}">${Math.abs(diff) < 1e-9 ? 'no change' : (diff > 0 ? '▲ ' : '▼ ') + amt} vs prev.</div>`;
     }
-    return `<button type="button" class="domain-card ${filter.domain === domain ? 'selected' : ''}" data-domain="${esc(domain)}" aria-pressed="${filter.domain === domain}">
-      <div class="dc-top"><span class="dc-name">${esc(domain)}</span><span class="dc-total">${s.total} <small>task${s.total === 1 ? '' : 's'}</small></span></div>
-      <div class="dc-meta"><b>${pct(s.rate)}</b> complete · <b>${s.Open + s.Active}</b> open · <b>${s.issues}</b> issue${s.issues === 1 ? '' : 's'}</div>
-      ${miniBar(s)}<div class="chips">${chips}</div></button>`;
-  }).join('') || '<div class="empty">No tasks match the current filters.</div>';
+    return `<div class="kpi"><div class="v">${fmtNum(v, c.fmt)}</div><div class="l">${c.label}${c.sub ? ' <span class="num">' + esc(c.sub(k)) + '</span>' : ''}</div>${d}</div>`;
+  }).join('')}</div>`;
 }
-$('domainGrid').addEventListener('click', e => {
-  const card = e.target.closest('[data-domain]');
-  if (card) setFilter('domain', card.dataset.domain);
+function sbar(t) {
+  const parts = CFG.bucketOrder.map(b => [b, t.filter(x => x.bucket === b).length]).filter(x => x[1]);
+  const total = t.length || 1;
+  return `<div class="sbar" role="img" aria-label="${esc(parts.map(([b, n]) => `${b} ${n}`).join(', '))}">${parts.map(([b, n]) => `<span style="width:${(n / total) * 100}%;background:var(${STATUS_COLOR[b]})" title="${b}: ${n}"></span>`).join('')}</div>`;
+}
+function statusLegend() { return `<div class="legend">${CFG.bucketOrder.filter(b => b !== 'Unknown').map(b => `<span><i style="background:var(${STATUS_COLOR[b]})"></i>${b}</span>`).join('')}</div>`; }
+function domainCards(ctx) {
+  return `<div class="domains">${ctx.agg.byDomain.map(d => {
+    const ts = ctx.list.filter(t => t.domain === d.domain);
+    const active = C.normKey(state.filters.domain) === C.normKey(d.domain);
+    return `<button type="button" class="dcard" data-domain="${esc(d.domain)}" aria-pressed="${active}">
+      <h3><span>${esc(d.domain)}</span><span class="meta num">${d.apps.length} app${d.apps.length === 1 ? '' : 's'}</span></h3>
+      <div class="big">${d.total}</div>
+      ${sbar(ts)}
+      <div class="meta num">${d.done} done, ${d.open} open, ${d.openIssues} open issue${d.openIssues === 1 ? '' : 's'}${d.avgAge != null ? `, avg age ${d.avgAge.toFixed(0)} d` : ''}</div>
+    </button>`;
+  }).join('') || '<p class="muted">No tasks match these filters.</p>'}</div>`;
+}
+function ticketHtml(t) {
+  if (!t.tickets.length) return '<span class="flag">none</span>';
+  return t.tickets.map(id => { const u = C.ticketUrl(id); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(id)}</a>` : esc(id); }).join('<br>');
+}
+function statusPill(t) { return `<span class="status" style="background:var(${STATUS_COLOR[t.bucket]})" title="${esc(t.status || 'blank')}">${esc(t.status || 'blank')}</span>`; }
+function ageHtml(t) { return t.age == null ? '' : `<span class="${t.age > CFG.ageHighlightDays ? 'age-hot' : ''}">${t.age}</span>`; }
+const COLS = [
+  { key: 'ticket', label: 'Ticket', val: t => t.tickets.join(' '), html: ticketHtml },
+  { key: 'task', label: 'Task', val: t => t.task, html: t => esc(t.task) + (t.flags.length ? ` <span class="flag" title="${esc(t.flags.join(', '))}">⚑</span>` : ''), cls: 'task' },
+  { key: 'type', label: 'Type', val: t => t.type, html: t => esc(t.type) },
+  { key: 'app', label: 'Application', val: t => t.app, html: t => esc(t.app) },
+  { key: 'domain', label: 'Domain', val: t => t.domain, html: t => esc(t.domain) },
+  { key: 'date', label: 'Date', val: t => t.date || '', html: t => t.date ? esc(t.date) : `<span class="flag">${esc(t.dateRaw || 'missing')}</span>`, cls: 'nowrap' },
+  { key: 'status', label: 'Status', val: t => CFG.bucketOrder.indexOf(t.bucket), html: statusPill },
+  { key: 'poc', label: 'POC', val: t => t.pocRaw, html: t => esc(t.pocRaw) },
+  { key: 'shadow', label: 'Shadowing', val: t => t.shadowRaw, html: t => esc(t.shadowRaw) },
+  { key: 'age', label: 'Age (d)', val: t => t.age == null ? -1 : t.age, html: ageHtml, cls: 'n' },
+];
+function taskTable(list) {
+  const { key, dir } = state.sort, col = COLS.find(c => c.key === key) || COLS[9];
+  const rows = [...list].sort((a, b) => { const x = col.val(a), y = col.val(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+  return `<div class="table-wrap"><table><thead><tr>${COLS.map(c => `<th data-sort="${c.key}" class="${c.cls === 'n' ? 'n' : ''}" aria-sort="${c.key === key ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${c.label}${c.key === key ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(t => `<tr>${COLS.map(c => `<td class="${c.cls || ''}">${c.html(t)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${COLS.length}" class="muted">No tasks match these filters.</td></tr>`}</tbody></table></div>`;
+}
+function tasksBlock(ctx, title = 'Tasks') {
+  return `<section class="block"><h2>${title} <span class="muted num" style="font-weight:400">(${ctx.list.length})</span></h2>
+    <div class="actions no-print" style="margin:-4px 0 10px"><button class="btn btn-line" type="button" data-export="tasks">Export tasks CSV</button><button class="btn btn-line" type="button" data-export="kpi">Export KPI summary CSV</button></div>
+    <div id="task-table">${taskTable(ctx.list)}</div></section>`;
+}
+function topIssues(ctx) {
+  const t = ctx.agg.topOpenIssues;
+  return `<ul class="toplist">${t.map(x => `<li><div><div class="age">${x.age ?? '–'}</div><div class="muted" style="font-size:.75rem">days open</div></div>
+    <div><strong>${esc(x.task)}</strong><div class="muted" style="font-size:.85rem">${esc(x.app)}, ${esc(x.domain)} · ${ticketHtml(x)} · ${statusPill(x)} · ${esc(x.pocRaw || 'no POC')}</div></div></li>`).join('') || '<li><div></div><div class="muted">No open issues.</div></li>'}</ul>`;
+}
+function domainBreakdown(ctx, compact = false) {
+  return `<div class="table-wrap"><table><thead><tr><th>Domain / application</th><th class="n">Total</th><th class="n">Done</th><th class="n">Open</th><th class="n">Done %</th><th class="n">Open issues</th>${compact ? '' : '<th class="n">Deployments</th>'}<th class="n">Avg age</th></tr></thead><tbody>
+    ${ctx.agg.byDomain.map(d => `<tr class="dom ${compact ? '' : 'click'}" data-domain="${esc(d.domain)}"><td>${esc(d.domain)}</td>${statCells(d, compact)}</tr>` +
+      d.apps.map(a => `<tr class="sub ${compact ? '' : 'click'}" data-app="${esc(a.app)}" data-domain="${esc(d.domain)}"><td>${esc(a.app)}</td>${statCells(a, compact)}</tr>`).join('')).join('')}
+  </tbody></table></div>`;
+}
+function statCells(s, compact) {
+  return `<td class="n">${s.total}</td><td class="n">${s.done}</td><td class="n">${s.open}</td><td class="n">${s.completionRate.toFixed(0)}%</td><td class="n">${s.openIssues}</td>${compact ? '' : `<td class="n">${s.deployments}</td>`}<td class="n">${s.avgAge == null ? '–' : s.avgAge.toFixed(1)}</td>`;
+}
+
+/* ========================================================================= */
+/* VIEWS                                                                     */
+/* ========================================================================= */
+function viewOverview(el, ctx) {
+  el.innerHTML = kpiCards(ctx.agg.kpis, ctx.prevAgg && ctx.prevAgg.kpis) + domainCards(ctx) +
+    `<div class="grid-2"><section class="block"><h2>Top open issues by age</h2>${topIssues(ctx)}</section>
+     <section class="block"><h2>Completion trend in ${esc(C.periodLabel(state.period))}</h2><div class="chart"><canvas id="ch-trend"></canvas></div><p class="muted" style="font-size:.8rem;margin:6px 0 0">Cumulative tasks by task date, and how many of them are done.</p></section></div>`;
+  const d = ctx.agg.daily;
+  chart('ch-trend', { type: 'line', data: { labels: d.map(x => x.date.slice(5)), datasets: [
+    { label: 'Tasks', data: d.map(x => x.total), borderColor: css('--brand'), backgroundColor: css('--brand'), tension: .25 },
+    { label: 'Done', data: d.map(x => x.done), borderColor: css('--s-done'), backgroundColor: css('--s-done'), tension: .25 }] } });
+}
+function viewDomain(el, ctx) {
+  el.innerHTML = kpiCards(ctx.agg.kpis, ctx.prevAgg && ctx.prevAgg.kpis) + domainCards(ctx) +
+    `<section class="block"><h2>Domain → application breakdown</h2>${domainBreakdown(ctx)}</section>
+     <div class="grid-2"><section class="block"><h2>Status by domain</h2><div class="chart"><canvas id="ch-dom"></canvas></div>${statusLegend()}</section>
+     <section class="block"><h2>Aging of open work</h2><div class="chart"><canvas id="ch-aging"></canvas></div></section></div>` + tasksBlock(ctx);
+  stackedStatus('ch-dom', ctx.agg.byDomain.map(d => d.domain), name => ctx.list.filter(t => t.domain === name), lab => go({ view: 'domain', filter: { domain: lab, app: '' } }));
+  agingChart('ch-aging', ctx.agg.aging);
+}
+function viewApplication(el, ctx) {
+  const apps = ctx.agg.byApp;
+  el.innerHTML = kpiCards(ctx.agg.kpis, ctx.prevAgg && ctx.prevAgg.kpis) +
+    `<section class="block"><h2>Application summary</h2><div class="table-wrap"><table><thead><tr><th>Application</th><th>Domain</th><th class="n">Total</th><th class="n">Done</th><th class="n">Open</th><th class="n">Done %</th><th class="n">Open issues</th><th class="n">Deployments</th><th class="n">Avg age</th></tr></thead><tbody>
+      ${apps.map(a => `<tr class="click" data-app="${esc(a.app)}"><td>${esc(a.app)}</td><td>${esc(a.domain)}</td>${statCells(a)}</tr>`).join('') || '<tr><td colspan="9" class="muted">No tasks match these filters.</td></tr>'}</tbody></table></div></section>
+     <div class="grid-2"><section class="block"><h2>Tasks by application</h2><div class="chart tall"><canvas id="ch-apps"></canvas></div>${statusLegend()}</section>
+     <section class="block"><h2>Tasks by type</h2><div class="chart tall"><canvas id="ch-type"></canvas></div></section></div>` + tasksBlock(ctx);
+  const top = apps.slice(0, 15);
+  stackedStatus('ch-apps', top.map(a => a.app), name => ctx.list.filter(t => t.app === name), lab => go({ filter: { app: lab } }), true);
+  chart('ch-type', { type: 'bar', data: { labels: ctx.agg.byType.map(x => x.type), datasets: [{ label: 'Tasks', data: ctx.agg.byType.map(x => x.count), backgroundColor: css('--brand-2') }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, onClick: (e, els, ch) => { if (els.length) { const v = ch.data.labels[els[0].index]; go({ filter: { type: v === '(blank)' ? '' : v } }); } } } });
+}
+function viewTeam(el, ctx) {
+  const w = ctx.agg.team, m = w.members;
+  el.innerHTML = kpiCards(ctx.agg.kpis, ctx.prevAgg && ctx.prevAgg.kpis) +
+    `<div class="grid-2"><section class="block"><h2>Team workload${w.hasTeam ? ' (POC and shadowing)' : ' (POC)'}</h2><div class="chart tall"><canvas id="ch-team"></canvas></div>
+       ${w.hasTeam ? '' : '<p class="muted" style="font-size:.82rem">Add a “Team” sheet (Name, Aliases) to count shadowing and separate requesters from the team.</p>'}</section>
+     <section class="block"><h2>Aging of each person's open work</h2><div class="chart tall"><canvas id="ch-team-age"></canvas></div></section></div>
+     <section class="block"><h2>Workload table</h2><div class="table-wrap"><table><thead><tr><th>Person</th><th class="n">POC</th>${w.hasTeam ? '<th class="n">Shadowing</th>' : ''}<th class="n">Total</th><th class="n">Open</th><th class="n">Avg age of open</th>${CFG.agingBuckets.map(b => `<th class="n">${b.label}</th>`).join('')}</tr></thead><tbody>
+       ${m.map(p => `<tr class="click" data-person="${esc(p.key)}"><td>${esc(p.name)}</td><td class="n">${p.poc}</td>${w.hasTeam ? `<td class="n">${p.shadow}</td>` : ''}<td class="n">${p.total}</td><td class="n">${p.open}</td><td class="n">${p.avgAge == null ? '–' : p.avgAge.toFixed(1)}</td>${p.aging.map(n => `<td class="n">${n}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
+     ${w.hasTeam ? `<section class="block"><h2>Requesters and sources (non-team POCs)</h2><div class="chart"><canvas id="ch-req"></canvas></div></section>` : ''}` + tasksBlock(ctx);
+  const personClick = list => (e, els) => { if (els.length) go({ filter: { person: list[els[0].index].key } }); };
+  const ds = [{ label: 'POC', data: m.map(p => p.poc), backgroundColor: css('--brand') }];
+  if (w.hasTeam) ds.push({ label: 'Shadowing', data: m.map(p => p.shadow), backgroundColor: '#8fb0e8' });
+  chart('ch-team', { type: 'bar', data: { labels: m.map(p => p.name), datasets: ds }, options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true } }, onClick: personClick(m) } });
+  const agingColors = ['#9cc5a7', '#e3c15a', '#ec9443', '#c62828'];
+  chart('ch-team-age', { type: 'bar', data: { labels: m.map(p => p.name), datasets: CFG.agingBuckets.map((b, i) => ({ label: b.label, data: m.map(p => p.aging[i]), backgroundColor: agingColors[i] })) },
+    options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true } }, onClick: personClick(m) } });
+  if (w.hasTeam) chart('ch-req', { type: 'bar', data: { labels: w.requesters.map(p => p.name), datasets: [{ label: 'Tasks raised', data: w.requesters.map(p => p.total), backgroundColor: css('--s-requested') }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } }, onClick: personClick(w.requesters) } });
+}
+async function viewTrends(el, ctx, seq) {
+  const periods = state.periods.map(p => p.period).sort();
+  el.innerHTML = `<section class="block"><p class="muted">Loading ${periods.length} month${periods.length === 1 ? '' : 's'}…</p></section>`;
+  const { qc, ...f } = state.filters;
+  const rows = [];
+  for (const p of periods) {
+    const e = await getDataset(p);
+    if (!e) continue;
+    const list = C.applyFilters(e.ds.tasks, f, e.ds);
+    rows.push({ p, a: C.aggregate(list, e.ds) });
+  }
+  if (seq !== renderSeq) return;
+  if (rows.length < 2) { el.innerHTML = `<section class="block"><h2>Trends</h2><p class="muted">Trends need at least two published months. ${rows.length} available so far.</p></section>`; return; }
+  el.innerHTML = `<div class="grid-2">
+    <section class="block"><h2>Total, done and open</h2><div class="chart"><canvas id="tr-vol"></canvas></div></section>
+    <section class="block"><h2>Completion rate</h2><div class="chart"><canvas id="tr-rate"></canvas></div></section>
+    <section class="block"><h2>Open issues</h2><div class="chart"><canvas id="tr-iss"></canvas></div></section>
+    <section class="block"><h2>Average age of open work (days)</h2><div class="chart"><canvas id="tr-age"></canvas></div></section></div>
+    <section class="block" style="margin-top:16px"><h2>Volume per domain</h2><div class="chart tall"><canvas id="tr-dom"></canvas></div></section>
+    <section class="block"><h2>Month by month</h2><div class="table-wrap"><table><thead><tr><th>Month</th>${KPI_CARDS.map(c => `<th class="n">${c.label}</th>`).join('')}</tr></thead><tbody>
+      ${rows.slice().reverse().map(r => `<tr class="click" data-period="${r.p}"><td>${esc(C.periodLabel(r.p))}</td>${KPI_CARDS.map(c => `<td class="n">${fmtNum(r.a.kpis[c.key], c.fmt)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`;
+  const labels = rows.map(r => C.periodLabel(r.p).replace(/ (\d{2})(\d{2})$/, ' $2'));
+  const line = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, tension: .25, spanGaps: true });
+  chart('tr-vol', { type: 'line', data: { labels, datasets: [line('Total', rows.map(r => r.a.kpis.total), css('--brand')), line('Done', rows.map(r => r.a.kpis.done), css('--s-done')), line('Open', rows.map(r => r.a.kpis.open), css('--s-pending'))] } });
+  chart('tr-rate', { type: 'line', data: { labels, datasets: [line('Completion %', rows.map(r => +r.a.kpis.completionRate.toFixed(1)), css('--s-done'))] }, options: { scales: { y: { min: 0, max: 100 } }, plugins: { legend: { display: false } } } });
+  chart('tr-iss', { type: 'bar', data: { labels, datasets: [{ label: 'Open issues', data: rows.map(r => r.a.kpis.openIssues), backgroundColor: css('--accent') }] }, options: { plugins: { legend: { display: false } } } });
+  chart('tr-age', { type: 'line', data: { labels, datasets: [line('Avg age', rows.map(r => r.a.kpis.avgAge == null ? null : +r.a.kpis.avgAge.toFixed(1)), css('--warn'))] }, options: { plugins: { legend: { display: false } } } });
+  const doms = [...new Set(rows.flatMap(r => r.a.byDomain.map(d => d.domain)))];
+  const pal = ['#0b2d6b', '#2f6fd6', '#1d8a4b', '#e3a21a', '#8e44ad', '#e2001a', '#16a3b8', '#8b95a9'];
+  chart('tr-dom', { type: 'bar', data: { labels, datasets: doms.map((d, i) => ({ label: d, data: rows.map(r => (r.a.byDomain.find(x => x.domain === d) || { total: 0 }).total), backgroundColor: pal[i % pal.length] })) },
+    options: { scales: { x: { stacked: true }, y: { stacked: true } } } });
+}
+function viewQuality(el, ctx) {
+  const q = ctx.ds.quality;
+  el.innerHTML = `<section class="block"><h2>Data quality checks for ${esc(C.periodLabel(state.period))}</h2>
+    <p class="muted" style="margin-top:-6px">Counts cover the whole file. Select a check to list its tasks.</p>
+    <div class="qlist">${q.checks.map(c => `<button type="button" class="qitem ${c.idx.length ? (c.info ? '' : 'warn') : 'ok'}" data-qc="${c.id}" aria-pressed="${state.filters.qc === c.id}">
+      <div class="c">${c.idx.length}</div><div>${esc(c.label)}${c.info ? ' <span class="muted">(info)</span>' : ''}</div>
+      ${c.detail && c.detail.length ? `<small>${esc(c.detail.slice(0, 6).join('; '))}${c.detail.length > 6 ? ` and ${c.detail.length - 6} more` : ''}</small>` : ''}</button>`).join('')}</div>
+    <p class="muted" style="font-size:.82rem;margin-bottom:0">Sheets used: tasks “${esc(ctx.ds.meta.tasksSheet || 'not found')}”, mapping “${esc(ctx.ds.meta.mappingSheet || 'not found')}”, team “${esc(ctx.ds.meta.teamSheet || 'none')}”.</p></section>` +
+    (state.filters.qc ? tasksBlock(ctx, 'Tasks for this check') : '');
+}
+function viewPrint(el, ctx) {
+  el.innerHTML = `<div class="actions no-print" style="margin-bottom:12px"><button class="btn btn-primary" type="button" onclick="window.print()">Print / PDF</button><span class="muted">A4 landscape. Filters apply.</span></div>` +
+    kpiCards(ctx.agg.kpis, ctx.prevAgg && ctx.prevAgg.kpis) + domainCards(ctx) +
+    `<div class="print-cols grid-2"><section class="block"><h2>Domain breakdown</h2>${domainBreakdown(ctx, true)}</section>
+     <section class="block"><h2>Top open issues by age</h2>${topIssues(ctx)}</section></div>`;
+}
+
+/* ---------- view interactions (event delegation) ---------- */
+$('#view').addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('a')) return;
+  const th = t.closest('th[data-sort]');
+  if (th) { const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === 'age' ? -1 : 1) }; $('#task-table').innerHTML = taskTable(lastCtx.list); return; }
+  const ex = t.closest('[data-export]'); if (ex) return ex.dataset.export === 'tasks' ? exportTasks() : exportKpis();
+  const qc = t.closest('[data-qc]'); if (qc) return go({ filter: { qc: state.filters.qc === qc.dataset.qc ? '' : qc.dataset.qc } });
+  const per = t.closest('[data-period]'); if (per) return go({ view: 'overview', period: per.dataset.period });
+  const person = t.closest('[data-person]'); if (person) return go({ filter: { person: person.dataset.person } });
+  const app = t.closest('[data-app]'); if (app) return go({ view: state.view === 'overview' || state.view === 'print' ? 'application' : state.view, filter: { app: app.dataset.app, domain: app.dataset.domain || state.filters.domain } });
+  const dom = t.closest('[data-domain]');
+  if (dom && state.view !== 'print') {
+    const same = C.normKey(state.filters.domain) === C.normKey(dom.dataset.domain);
+    return go({ view: state.view === 'overview' ? 'domain' : state.view, filter: { domain: same && state.view !== 'overview' ? '' : dom.dataset.domain, app: '' } });
+  }
 });
 
-/* ---------- Charts ---------- */
-function renderCharts(list) {
-  if (typeof Chart === 'undefined') {
-    document.querySelectorAll('.chart-box').forEach(b => { b.innerHTML = '<div class="empty">Charts unavailable: Chart.js could not be loaded.</div>'; });
-    return;
-  }
-  Chart.defaults.font.family = '"Segoe UI", "Aptos", "Helvetica Neue", sans-serif';
-  Chart.defaults.color = '#5f6f86';
-  const byBucket = { stackFn: r => r.bucket, stackOrder: BUCKETS, color: b => BUCKET_COLOR[b] };
-
-  const sc = stats(list);
-  const present = BUCKETS.filter(b => sc[b]);
-  roundChart('statusChart', 'doughnut', present, present.map(b => sc[b]), present.map(b => BUCKET_COLOR[b]), v => setFilter('status', v));
-
-  stackedBar('domainChart', list, r => [r.domain], { ...byBucket, onClick: v => setFilter('domain', v) });
-  stackedBar('applicationChart', list, r => [r.app], { ...byBucket, limit: 12, onClick: v => setFilter('app', v) });
-  if (DOMAIN_FIRST) $('applicationChartTitle').textContent = filter.domain === 'all' ? 'Applications (all domains)' : `Applications in ${filter.domain}`;
-
-  const types = [...groupBy(list, r => r.type).entries()].sort((a, b) => b[1].length - a[1].length);
-  const typeColor = t => PALETTE[types.findIndex(e => e[0] === t) % PALETTE.length];
-  if (DOMAIN_FIRST) {
-    stackedBar('typeChart', list, r => [r.domain], { stackFn: r => r.type, stackOrder: types.map(e => e[0]), color: typeColor, onClick: v => setFilter('domain', v) });
-  } else {
-    roundChart('typeChart', 'pie', types.map(e => e[0]), types.map(e => e[1].length), types.map(e => typeColor(e[0])), v => setFilter('type', v));
-  }
-
-  stackedBar('pocChart', list, r => r.pocs, { ...byBucket, onClick: v => setFilter('poc', v) });
-
-  const weekKey = r => { if (!r.date) return []; const d = new Date(r.date); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return [d.getTime()]; };
-  stackedBar('weekChart', list, weekKey, { ...byBucket, horizontal: false, sortKeys: (a, b) => a - b,
-    labelFn: t => 'Week of ' + new Date(Number(t)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) });
+/* ========================================================================= */
+/* CHARTS                                                                    */
+/* ========================================================================= */
+const charts = new Map();
+let lastCtx = null;
+function destroyCharts() { charts.forEach(c => c.destroy()); charts.clear(); }
+function chart(id, cfg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!window.Chart) { el.parentElement.innerHTML = '<div class="chart-msg">Charts are unavailable: Chart.js could not be loaded. Run <code>npm run vendor</code> or check the network.</div>'; return; }
+  cfg.options = Object.assign({ responsive: true, maintainAspectRatio: false, animation: false, plugins: {} }, cfg.options || {});
+  cfg.options.plugins = Object.assign({ legend: { position: 'bottom', labels: { boxWidth: 12 } } }, cfg.options.plugins);
+  charts.set(id, new window.Chart(el, cfg));
+}
+function stackedStatus(id, labels, tasksFor, onPick, horizontal) {
+  chart(id, { type: 'bar', data: { labels, datasets: CFG.bucketOrder.map(b => ({ label: b, data: labels.map(l => tasksFor(l).filter(t => t.bucket === b).length), backgroundColor: css(STATUS_COLOR[b]) })).filter(d => d.data.some(Boolean)) },
+    options: { indexAxis: horizontal ? 'y' : 'x', scales: { x: { stacked: true }, y: { stacked: true } }, plugins: { legend: { display: false } },
+      onClick: (e, els) => { if (els.length) onPick(labels[els[0].index]); } } });
+}
+function agingChart(id, aging) {
+  chart(id, { type: 'bar', data: { labels: aging.map(a => a.label), datasets: [{ label: 'Open tasks', data: aging.map(a => a.count), backgroundColor: ['#9cc5a7', '#e3c15a', '#ec9443', '#c62828'] }] }, options: { plugins: { legend: { display: false } } } });
 }
 
-function roundChart(id, type, labels, data, colors, onClick) {
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart($(id), {
-    type,
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#fff', borderWidth: 2 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false, cutout: type === 'doughnut' ? '58%' : 0,
-      onClick: (e, els, chart) => { if (els.length) onClick(chart.data.labels[els[0].index]); },
-      plugins: {
-        legend: { position: 'right', labels: { boxWidth: 12, generateLabels: chart => chart.data.labels.map((l, i) => ({
-          text: `${l}  ${chart.data.datasets[0].data[i]}`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: '#fff', index: i })) } },
-        tooltip: { callbacks: { label: c => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${pct(c.parsed / t)})`; } } }
-      }
-    }
-  });
-}
-
-function stackedBar(id, list, keysFn, o) {
-  const horizontal = o.horizontal !== false;
-  const counts = new Map();
-  list.forEach(r => keysFn(r).forEach(k => {
-    if (!counts.has(k)) counts.set(k, { total: 0 });
-    const c = counts.get(k); const s = o.stackFn(r);
-    c.total++; c[s] = (c[s] || 0) + 1;
-  }));
-  let keys = [...counts.keys()];
-  keys.sort(o.sortKeys || ((a, b) => (a === NONE) - (b === NONE) || counts.get(b).total - counts.get(a).total));
-  if (o.limit) keys = keys.slice(0, o.limit);
-  const stacks = o.stackOrder.filter(s => keys.some(k => counts.get(k)[s]));
-  if (charts[id]) charts[id].destroy();
-  const canvas = $(id);
-  canvas.parentElement.style.height = (horizontal ? Math.max(280, keys.length * 32 + 80) : 280) + 'px';
-  const valueAxis = { stacked: true, beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#edf1f7' } };
-  const categoryAxis = { stacked: true, grid: { display: false }, ticks: { autoSkip: false, color: '#0f2445' } };
-  charts[id] = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels: keys.map(k => o.labelFn ? o.labelFn(k) : k),
-      datasets: stacks.map(s => ({ label: s, data: keys.map(k => counts.get(k)[s] || 0), backgroundColor: o.color(s), borderColor: '#fff', borderWidth: 1, borderRadius: 3, maxBarThickness: 26 }))
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? 'y' : 'x',
-      onClick: o.onClick ? (e, els) => { if (els.length) o.onClick(keys[els[0].index]); } : undefined,
-      onHover: (e, els) => { e.native.target.style.cursor = els.length && o.onClick ? 'pointer' : 'default'; },
-      interaction: { mode: 'index', axis: horizontal ? 'y' : 'x', intersect: false },
-      plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 12 } },
-        tooltip: { filter: c => c.parsed[horizontal ? 'x' : 'y'] > 0, callbacks: { footer: items => 'Total: ' + items.reduce((a, c) => a + c.parsed[horizontal ? 'x' : 'y'], 0) } }
-      },
-      scales: horizontal ? { x: valueAxis, y: categoryAxis } : { x: categoryAxis, y: valueAxis }
-    }
-  });
-}
-
-/* ---------- Breakdown table ---------- */
-function breakdownCells(s) {
-  return `<td class="num">${s.total}</td><td class="num">${s.Done}</td><td class="num">${s.Active}</td><td class="num">${s.Open}</td>
-    <td><div class="rate">${miniBar(s)}<span>${pct(s.rate)}</span></div></td><td class="num">${s.issues}</td><td class="num">${s.deploys}</td>`;
-}
-
-function renderBreakdown(list) {
-  const table = $('breakdownTable');
-  const metricHead = '<th class="num">Tasks</th><th class="num">Done</th><th class="num">Active</th><th class="num">Open</th><th>Completion</th><th class="num">Open issues</th><th class="num">Deployments</th>';
-  let body = '';
-  if (DOMAIN_FIRST) {
-    $('breakdownTitle').textContent = 'Domain → Application Breakdown';
-    $('breakdownHint').textContent = 'Each domain with the applications inside it. Click a name to filter; use the arrow to collapse a domain.';
-    table.querySelector('thead').innerHTML = `<tr><th>Domain / Application</th>${metricHead}</tr>`;
-    [...groupBy(list, r => r.domain).entries()].sort(byVolume).forEach(([domain, dl]) => {
-      const closed = collapsed.has(domain);
-      const apps = [...groupBy(dl, r => r.app).entries()].sort(byVolume);
-      body += `<tr class="group"><td><button class="caret" data-toggle="${esc(domain)}" aria-expanded="${!closed}" aria-label="Toggle ${esc(domain)}">${closed ? '▶' : '▼'}</button>
-        <button class="link" data-set="domain" data-value="${esc(domain)}">${esc(domain)}</button> <span class="muted" style="font-weight:600">· ${apps.length} app${apps.length === 1 ? '' : 's'}</span></td>${breakdownCells(stats(dl))}</tr>`;
-      if (!closed) apps.forEach(([app, al]) => {
-        body += `<tr class="child"><td><button class="link" data-set="app" data-value="${esc(app)}" data-domain="${esc(domain)}">${esc(app)}</button></td>${breakdownCells(stats(al))}</tr>`;
-      });
-    });
-  } else {
-    $('breakdownTitle').textContent = 'Application Summary';
-    $('breakdownHint').textContent = 'Per-application scorecard. Click a name to filter.';
-    table.querySelector('thead').innerHTML = `<tr><th>Application</th><th>Domain</th>${metricHead}</tr>`;
-    [...groupBy(list, r => r.app).entries()].sort(byVolume).forEach(([app, al]) => {
-      const domains = [...new Set(al.map(r => r.domain))].join(', ');
-      body += `<tr><td><button class="link" data-set="app" data-value="${esc(app)}">${esc(app)}</button></td><td>${esc(domains)}</td>${breakdownCells(stats(al))}</tr>`;
-    });
-  }
-  if (list.length) body += `<tr class="total"><td${DOMAIN_FIRST ? '' : ' colspan="2"'}>Total</td>${breakdownCells(stats(list))}</tr>`;
-  table.querySelector('tbody').innerHTML = body || `<tr><td colspan="9" class="empty">No tasks match the current filters.</td></tr>`;
-}
-$('breakdownTable').addEventListener('click', e => {
-  const t = e.target.closest('[data-toggle]');
-  if (t) { collapsed.has(t.dataset.toggle) ? collapsed.delete(t.dataset.toggle) : collapsed.add(t.dataset.toggle); render(); return; }
-  const l = e.target.closest('[data-set]');
-  if (!l) return;
-  if (l.dataset.domain) filter.domain = l.dataset.domain;
-  setFilter(l.dataset.set, l.dataset.value, true);
-});
-
-/* ---------- Task table ---------- */
-function tableHeaders() {
-  if (!DOMAIN_FIRST) return headers;
-  const lead = [cols.domain, cols.application].filter(Boolean);
-  return [...lead, ...headers.filter(h => !lead.includes(h))];
-}
-function cellValue(row, h) {
-  if (h === cols.domain) return row.domain;
-  if (h === cols.application) return row.app;
-  return String(row.raw[h] ?? '');
-}
-
-function renderTable(list) {
-  const hs = tableHeaders();
-  const sorted = [...list];
-  if (sort) {
-    sorted.sort((a, b) => cellValue(a, sort.key).localeCompare(cellValue(b, sort.key), undefined, { numeric: true }) * sort.dir);
-  } else if (DOMAIN_FIRST) {
-    const rank = v => (v === NONE ? '￿' : v);
-    sorted.sort((a, b) => rank(a.domain).localeCompare(rank(b.domain)) || rank(a.app).localeCompare(rank(b.app)) || (b.date || 0) - (a.date || 0));
-  }
-  const table = $('taskTable');
-  table.querySelector('thead').innerHTML = '<tr>' + hs.map(h => {
-    const arrow = sort && sort.key === h ? (sort.dir === 1 ? ' ▲' : ' ▼') : '';
-    return `<th class="sortable" data-sort="${esc(h)}" aria-sort="${arrow ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}">${esc(h)}${arrow}</th>`;
-  }).join('') + '</tr>';
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  currentPage = Math.min(currentPage, totalPages);
-  const pageRows = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  table.querySelector('tbody').innerHTML = pageRows.map(row => '<tr>' + hs.map(h => {
-    const v = cellValue(row, h);
-    if (h === cols.status) return `<td><span class="status-pill status-${row.bucket.toLowerCase()}">${esc(v || 'Unspecified')}</span></td>`;
-    if ((h === cols.domain || h === cols.application) && v === NONE) return `<td class="muted">${NONE}</td>`;
-    if (h === cols.date || h === cols.type) return `<td style="white-space:nowrap">${esc(v)}</td>`;
-    return `<td>${esc(v)}</td>`;
-  }).join('') + '</tr>').join('') || `<tr><td colspan="${hs.length}" class="empty">No tasks match the current filters.</td></tr>`;
-
-  const active = FILTERS.filter(f => filter[f.key] !== 'all').map(f => `${f.label}: ${filter[f.key]}`);
-  $('taskDetailsTitle').textContent = 'Task Details' + (active.length ? ' - ' + active.join(' - ') : '');
-  $('tableCount').textContent = `${sorted.length} task${sorted.length === 1 ? '' : 's'} matched - page ${currentPage} of ${totalPages}`;
-  renderPagination(sorted.length, totalPages);
-}
-$('taskTable').addEventListener('click', e => {
-  const th = e.target.closest('[data-sort]');
-  if (!th) return;
-  const key = th.dataset.sort;
-  sort = !sort || sort.key !== key ? { key, dir: 1 } : sort.dir === 1 ? { key, dir: -1 } : null;
-  currentPage = 1;
-  render();
-});
-
-function renderPagination(totalRows, totalPages) {
-  const el = $('tablePagination');
-  if (totalRows === 0 || totalPages === 1) { el.innerHTML = ''; return; }
-  const items = buildPageItems(totalPages, currentPage, 5).map(item => item === '...'
-    ? '<span class="muted">...</span>'
-    : `<button type="button" class="page-btn${item === currentPage ? ' active' : ''}" data-page="${item}">${item}</button>`).join('');
-  el.innerHTML = `
-    <button type="button" class="page-btn" data-page="1" ${currentPage <= 1 ? 'disabled' : ''}>First</button>
-    <button type="button" class="page-btn" data-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''}>&lt;</button>
-    ${items}
-    <button type="button" class="page-btn" data-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''}>&gt;</button>
-    <button type="button" class="page-btn" data-page="${totalPages}" ${currentPage >= totalPages ? 'disabled' : ''}>Last</button>`;
-}
-$('tablePagination').addEventListener('click', e => {
-  const b = e.target.closest('[data-page]');
-  if (!b || b.disabled) return;
-  currentPage = Number(b.dataset.page);
-  renderTable(filteredRows());
-});
-
-function buildPageItems(totalPages, current, maxVisible) {
-  if (totalPages <= maxVisible) return Array.from({ length: totalPages }, (_, i) => i + 1);
-  const pages = [1];
-  const sibling = Math.max(1, Math.floor((maxVisible - 3) / 2));
-  let start = Math.max(2, current - sibling);
-  let end = Math.min(totalPages - 1, current + sibling);
-  if (current <= sibling + 2) { start = 2; end = maxVisible - 1; }
-  else if (current >= totalPages - (sibling + 1)) { start = totalPages - (maxVisible - 2); end = totalPages - 1; }
-  if (start > 2) pages.push('...');
-  for (let p = start; p <= end; p += 1) pages.push(p);
-  if (end < totalPages - 1) pages.push('...');
-  pages.push(totalPages);
-  return pages;
-}
-
-/* ---------- Export ---------- */
-function downloadCsv(name, lines) {
-  const csv = lines.map(r => r.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }));
+/* ========================================================================= */
+/* EXPORT                                                                    */
+/* ========================================================================= */
+function download(name, text, type = 'text/plain') {
   const a = document.createElement('a');
-  a.href = url; a.download = name; a.click();
-  URL.revokeObjectURL(url);
+  a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const csvCell = v => { const s = String(v == null ? '' : v); return /[",\r\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+const toCsv = rows => '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+function fileStem() { const f = FILTER_KEYS.filter(k => state.filters[k]).map(k => state.filters[k]).join('_'); return `L2L3_${state.period}_${state.view}${f ? '_' + f.replace(/[^\w-]+/g, '-') : ''}`; }
+function exportTasks() {
+  const rows = [['Ticket ID', 'Task', 'Type', 'Application', 'Domain (normalized)', 'Domain (sheet)', 'Date', 'Status', 'Status bucket', 'POC', 'Shadowing', 'Age (days)', 'Flags']];
+  lastCtx.list.forEach(t => rows.push([t.ticketRaw, t.task, t.type, t.app, t.domain, t.domainColumn, t.date || t.dateRaw, t.status, t.bucket, t.pocRaw, t.shadowRaw, t.age == null ? '' : t.age, t.flags.join(' ')]));
+  download(fileStem() + '_tasks.csv', toCsv(rows), 'text/csv;charset=utf-8');
+}
+function exportKpis() {
+  const k = lastCtx.agg.kpis, pk = lastCtx.prevAgg && lastCtx.prevAgg.kpis;
+  const rows = [['Section', 'Name', 'Value', 'Previous month', 'Change']];
+  KPI_CARDS.forEach(c => rows.push(['KPI', c.label, k[c.key] == null ? '' : +(+k[c.key]).toFixed(2), pk && pk[c.key] != null ? +(+pk[c.key]).toFixed(2) : '', pk && pk[c.key] != null && k[c.key] != null ? +(k[c.key] - pk[c.key]).toFixed(2) : '']));
+  const v = state.view;
+  if (v === 'application') lastCtx.agg.byApp.forEach(a => rows.push(['Application', a.app, a.total, '', '', a.domain, a.done, a.open, a.openIssues]));
+  else if (v === 'team') lastCtx.agg.team.members.forEach(p => rows.push(['Person', p.name, p.total, '', '', 'POC ' + p.poc, 'Shadowing ' + p.shadow, 'Open ' + p.open]));
+  else lastCtx.agg.byDomain.forEach(d => { rows.push(['Domain', d.domain, d.total, '', '', 'done ' + d.done, 'open ' + d.open, 'open issues ' + d.openIssues]); });
+  download(fileStem() + '_kpis.csv', toCsv(rows), 'text/csv;charset=utf-8');
 }
 
-function exportSummaryCsv() {
-  const list = filteredRows();
-  const line = (scope, domain, app, s) => [scope, domain, app, s.total, s.Done, s.Active, s.Open, pct(s.rate), s.issues, s.deploys];
-  const out = [['Level', 'Domain', 'Application', 'Tasks', 'Done', 'Active', 'Open', 'Completion Rate', 'Open Issues', 'Deployments']];
-  out.push(line('Total', 'All', 'All', stats(list)));
-  if (DOMAIN_FIRST) {
-    [...groupBy(list, r => r.domain).entries()].sort(byVolume).forEach(([d, dl]) => {
-      out.push(line('Domain', d, 'All', stats(dl)));
-      [...groupBy(dl, r => r.app).entries()].sort(byVolume).forEach(([a, al]) => out.push(line('Application', d, a, stats(al))));
-    });
-  } else {
-    [...groupBy(list, r => r.app).entries()].sort(byVolume).forEach(([a, al]) =>
-      out.push(line('Application', [...new Set(al.map(r => r.domain))].join('; '), a, stats(al))));
-    [...groupBy(list, r => r.domain).entries()].sort(byVolume).forEach(([d, dl]) => out.push(line('Domain', d, 'All', stats(dl))));
-  }
-  downloadCsv(DOMAIN_FIRST ? 'l2_l3_domain_kpi_summary.csv' : 'l2_l3_kpi_summary.csv', out);
+/* ========================================================================= */
+/* UPLOAD / PUBLISH / CLEAR                                                  */
+/* ========================================================================= */
+async function handleFile(file) {
+  if (!file) return;
+  const XLSX = await ensureLib(LIBS.xlsx);
+  if (!XLSX) return toast('The Excel reader (SheetJS) could not be loaded. Run npm run vendor, or check the network.', 6000);
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), C.READ_OPTS);
+    const sheets = C.sheetsFromWorkbook(wb, XLSX);
+    const det = C.detectSheets(sheets);
+    if (!det.tasksSheet) return toast('No task sheet found: the file needs a sheet with a TASK column.', 6000);
+    const period = C.detectPeriod(file.name, sheets);
+    if (!period) return toast('Could not tell the month: name the file “… <Month> <Year>.xlsx” or fill the Date column.', 6000);
+    const rec = { period, fileName: file.name, uploadedAt: new Date().toISOString(), sheets };
+    state.local.set(period, rec); state.cache.delete(period);
+    if (state.idbOk) await IDB.put(rec).catch(() => { state.idbOk = false; });
+    buildPeriods();
+    toast(`Loaded ${file.name} as ${C.periodLabel(period)}.`);
+    go({ period, filters: {} });
+  } catch (err) { console.error(err); toast('This file could not be read: ' + err.message, 6000); }
 }
+$('#btn-upload').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', e => { handleFile(e.target.files[0]); e.target.value = ''; });
+['dragover', 'dragenter'].forEach(ev => document.addEventListener(ev, e => { if ([...(e.dataTransfer.types || [])].includes('Files')) { e.preventDefault(); document.body.classList.add('dragging'); } }));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => { if (ev === 'dragleave' && e.relatedTarget) return; document.body.classList.remove('dragging'); }));
+document.addEventListener('drop', e => { if (e.dataTransfer.files.length) { e.preventDefault(); handleFile(e.dataTransfer.files[0]); } });
 
-function exportTasksCsv() {
-  const hs = tableHeaders();
-  downloadCsv('l2_l3_tasks.csv', [hs, ...filteredRows().map(r => hs.map(h => cellValue(r, h)))]);
-}
+$('#btn-publish').addEventListener('click', async () => {
+  const cur = await getDataset(state.period); if (!cur) return;
+  const snap = { fileName: cur.snap.fileName, period: state.period, publishedAt: new Date().toISOString(), sheets: cur.snap.sheets };
+  const entry = { period: snap.period, fileName: snap.fileName, publishedAt: snap.publishedAt, tasks: cur.ds.tasks.length };
+  const index = C.mergeIndex(window.TRACKER_HISTORY_INDEX || [], entry);
+  const latestP = (window.TRACKER_SNAPSHOT || {}).period;
+  const isLatest = !latestP || snap.period >= latestP;
+  const files = [];
+  if (isLatest) files.push(['latest.js', C.snapshotJs(snap), 'data/']);
+  files.push([`${snap.period}.js`, C.historyJs(snap), 'data/history/'], ['index.js', C.historyIndexJs(index), 'data/history/']);
+  files.forEach(([n, txt], i) => setTimeout(() => download(n, txt, 'text/javascript'), i * 400));
+  const dlg = $('#dlg');
+  dlg.innerHTML = `<h2 style="margin-top:0">Publish ${esc(C.periodLabel(snap.period))}</h2>
+    <p>${files.length} files are downloading. If the browser asks, allow multiple downloads. Move them into the repo:</p>
+    <ul>${files.map(([n, , d]) => `<li><code>${esc(n)}</code> → <code>${d}${esc(n)}</code></li>`).join('')}</ul>
+    ${isLatest ? '' : `<p class="muted">${esc(C.periodLabel(latestP))} is newer, so <code>data/latest.js</code> stays as it is.</p>`}
+    <p>Then commit and push: <code>git add data && git commit -m "Publish ${snap.period}" && git push</code></p>
+    <p class="muted">Simpler: drop the .xlsx into <code>data/inbox/</code> and push; the GitHub Action publishes it.</p>
+    <form method="dialog" style="text-align:right"><button class="btn btn-primary">Done</button></form>`;
+  dlg.showModal();
+});
+$('#btn-clear').addEventListener('click', async () => {
+  if (!state.local.size) return toast('There are no local uploads to clear.');
+  if (!confirm(`Remove ${state.local.size} local upload${state.local.size === 1 ? '' : 's'} from this browser? Published data is not affected.`)) return;
+  if (state.idbOk) await IDB.clear().catch(() => {});
+  state.local.clear(); state.cache.clear(); buildPeriods();
+  toast('Local uploads cleared.'); go({ period: null });
+});
+$('#btn-print').addEventListener('click', () => {
+  if (state.view === 'print') return window.print();
+  go({ view: 'print' });
+  setTimeout(() => window.print(), 500);
+});
 
-/* ---------- Helpers ---------- */
-function pct(v) { return `${Math.round(v * 100)}%`; }
-function esc(value) { return String(value).replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch])); }
-
-if (EMBEDDED) loadBook(EMBEDDED, true); else render();
+/* ========================================================================= */
+/* BOOT                                                                      */
+/* ========================================================================= */
+(async function boot() {
+  try { await IDB.open(); (await IDB.all() || []).forEach(r => state.local.set(r.period, r)); }
+  catch (e) { state.idbOk = false; }
+  buildPeriods();
+  await ensureLib(LIBS.chart);
+  await render();
+})();
 </script>
 </body>
 </html>
