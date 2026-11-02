@@ -3,7 +3,7 @@ window.TRACKER_HISTORY_INDEX = [
   {
     "period": "2026-10",
     "fileName": "L2_L3_Tracker_API_2026-10-01_2026-10-31 2.xlsx",
-    "publishedAt": "2026-11-02T15:33:03.144Z",
+    "publishedAt": "2026-11-02T15:39:06.007Z",
     "tasks": 20
   }
 ];
