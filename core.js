@@ -338,7 +338,7 @@
   }
   const ageBucket = age => CONFIG.agingBuckets.findIndex(b => age <= b.max);
 
-  /** filters: {domain, app, status ('Open' | bucket), type, person (key), q, qc (quality check id)} */
+  /** filters: {domain, app, status ('Open' | bucket), type, age (aging bucket index), person (key), q, qc (quality check id)} */
   function applyFilters(tasks, f, ds) {
     f = f || {};
     const qcSet = f.qc && ds ? new Set((ds.quality.checks.find(c => c.id === f.qc) || { idx: [] }).idx) : null;
@@ -348,6 +348,7 @@
       (!f.app || normKey(t.app) === normKey(f.app)) &&
       (!f.status || (f.status === 'Open' ? t.isOpen : t.bucket === f.status)) &&
       (!f.type || normKey(t.type) === normKey(f.type)) &&
+      (f.age == null || f.age === '' || (t.age != null && ageBucket(t.age) === +f.age)) &&
       (!f.person || t.poc.some(p => p.key === f.person) || t.shadow.some(p => p.key === f.person)) &&
       (!qcSet || qcSet.has(t.idx)) &&
       (!q || normKey([t.task, t.app, t.domain, t.ticketRaw, t.pocRaw, t.shadowRaw, t.type, t.status].join(' ')).includes(q)));
@@ -488,7 +489,7 @@
 
   return {
     CONFIG, READ_OPTS, sheetsFromWorkbook, detectSheets, normalize, splitMulti, parseDate, bucketOf, tokenKey,
-    refDateFor, applyAges, applyFilters, aggregate, stats, daysBetween, normKey,
+    refDateFor, applyAges, applyFilters, ageBucket, aggregate, stats, daysBetween, normKey,
     periodFromFileName, periodFromTasks, detectPeriod, periodLabel, snapshotJs, historyJs, historyIndexJs, mergeIndex, ticketUrl,
   };
 });

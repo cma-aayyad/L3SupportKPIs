@@ -65,6 +65,7 @@ section.block > h2 { margin: 0 0 12px; font-size: 1.02rem; font-weight: 650; }
 /* ---------- KPI cards ---------- */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr)); gap: 10px; margin-bottom: 16px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: var(--radius-sm); padding: 10px 12px; min-width: 0; }
+.kpi.click { cursor: pointer; } .kpi.click:hover { border-color: var(--brand-2); }
 .kpi .v { font-size: 1.65rem; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .kpi .l { font-size: .84rem; color: var(--muted); }
 .kpi .d { font-size: .8rem; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -132,7 +133,8 @@ dialog code { background: var(--soft); padding: 1px 5px; border-radius: 4px; ove
   .top-inner, main { padding-left: 12px; padding-right: 12px; }
   .title small { display: block; margin: 2px 0 0; }
   .tab { padding: 7px 10px; }
-  .kpi .v { font-size: 1.4rem; }
+  .kpi.click { cursor: pointer; } .kpi.click:hover { border-color: var(--brand-2); }
+.kpi .v { font-size: 1.4rem; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
@@ -147,7 +149,8 @@ dialog code { background: var(--soft); padding: 1px 5px; border-radius: 4px; ove
   section.block, .kpi, .dcard { break-inside: avoid; }
   section.block { padding: 8px 10px; margin-bottom: 8px; }
   .kpis { grid-template-columns: repeat(9, 1fr); gap: 6px; margin-bottom: 8px; }
-  .kpi .v { font-size: 1.25rem; }
+  .kpi.click { cursor: pointer; } .kpi.click:hover { border-color: var(--brand-2); }
+.kpi .v { font-size: 1.25rem; }
   .domains { grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
   .dcard { padding: 8px; } .dcard .big { font-size: 1.3rem; }
   .table-wrap { overflow: visible; border: 0; }
@@ -211,12 +214,13 @@ const VIEWS = [
   { id: 'overview', label: 'Overview' }, { id: 'domain', label: 'Domains' }, { id: 'application', label: 'Applications' },
   { id: 'team', label: 'Team' }, { id: 'trends', label: 'Trends' }, { id: 'quality', label: 'Data quality' }, { id: 'print', label: 'Print' },
 ];
-const FILTER_KEYS = ['domain', 'app', 'status', 'type', 'person', 'q', 'qc'];
+const FILTER_KEYS = ['domain', 'app', 'status', 'type', 'age', 'person', 'q', 'qc'];
+const AGE_COLORS = ['#9cc5a7', '#e3c15a', '#ec9443', '#c62828'];
 const STATUS_COLOR = { Requested: '--s-requested', Pending: '--s-pending', 'In Progress': '--s-progress', Done: '--s-done', Unknown: '--s-unknown' };
 const KPI_CARDS = [
   { key: 'total', label: 'Total tasks' },
-  { key: 'done', label: 'Done' },
-  { key: 'open', label: 'Open' },
+  { key: 'done', label: 'Done', click: { status: 'Done' } },
+  { key: 'open', label: 'Open', click: { status: 'Open' } },
   { key: 'completionRate', label: 'Completion rate', fmt: 'pct' },
   { key: 'openIssues', label: 'Open issues', sub: k => `(${k.issues} total)` },
   { key: 'deployments', label: 'Deployments done' },
@@ -392,9 +396,11 @@ function makeCtx(cur, prev, prevP) {
   const filters = state.filters;
   const list = C.applyFilters(cur.ds.tasks, filters, cur.ds);
   const agg = C.aggregate(list, cur.ds);
+  const { age, ...noAge } = filters;
+  const agingAll = age ? C.aggregate(C.applyFilters(cur.ds.tasks, noAge, cur.ds), cur.ds).aging : agg.aging;
   let prevAgg = null;
   if (prev) { const { qc, ...pf } = filters; prevAgg = C.aggregate(C.applyFilters(prev.ds.tasks, pf, prev.ds), prev.ds); }
-  return { cur, ds: cur.ds, list, agg, prevAgg, prevP };
+  return { cur, ds: cur.ds, list, agg, agingAll, prevAgg, prevP };
 }
 
 function renderTabs() {
@@ -436,6 +442,7 @@ function renderFilters(ds) {
     <label>Application<select data-f="app">${opt(apps, f.app, 'All applications')}</select></label>
     <label>Status<select data-f="status">${opt([['Open', 'Open (not done)'], ...CFG.bucketOrder.map(b => [b, b])], f.status, 'All statuses')}</select></label>
     <label>Type<select data-f="type">${opt(types, f.type, 'All types')}</select></label>
+    <label>Age of open work<select data-f="age">${opt(CFG.agingBuckets.map((b, i) => [String(i), b.label]), f.age, 'Any age')}</select></label>
     <label>Person<select data-f="person">${opt([...people.entries()].sort((a, b) => a[1].localeCompare(b[1])), f.person, 'Everyone')}</select></label>
     <label>Search<input data-f="q" type="search" value="${esc(f.q || '')}" placeholder="Task, ticket, name…"></label>`;
 }
@@ -443,6 +450,8 @@ function renderChips(ds) {
   const f = state.filters, chips = [];
   if (f.qc) { const c = ds.quality.checks.find(x => x.id === f.qc); chips.push(['qc', 'Data quality: ' + (c ? c.label : f.qc)]); }
   if (f.person) chips.push(['person', 'Person: ' + ds.people.displayName(f.person)]);
+  ['domain', 'app', 'status', 'type'].forEach(k => { if (f[k]) chips.push([k, ({ domain: 'Domain', app: 'Application', status: 'Status', type: 'Type' })[k] + ': ' + f[k]]); });
+  if (f.age) chips.push(['age', 'Open for ' + (CFG.agingBuckets[+f.age] || {}).label]);
   const any = FILTER_KEYS.some(k => f[k]);
   $('#chips').innerHTML = chips.map(([k, l]) => `<span class="chip">${esc(l)}<button type="button" data-unchip="${k}" aria-label="Remove filter">×</button></span>`).join('') +
     (any ? '<button class="btn btn-line" type="button" data-clear-filters style="padding:2px 10px;font-size:.82rem">Clear filters</button>' : '');
@@ -473,7 +482,8 @@ function kpiCards(k, pk) {
       const amt = c.fmt === 'pct' ? Math.abs(diff).toFixed(1) + ' pp' : c.fmt === 'days' ? Math.abs(diff).toFixed(1) + ' d' : Math.abs(Math.round(diff));
       d = `<div class="d ${cls}">${Math.abs(diff) < 1e-9 ? 'no change' : (diff > 0 ? '▲ ' : '▼ ') + amt} vs prev.</div>`;
     }
-    return `<div class="kpi"><div class="v">${fmtNum(v, c.fmt)}</div><div class="l">${c.label}${c.sub ? ' <span class="num">' + esc(c.sub(k)) + '</span>' : ''}</div>${d}</div>`;
+    const ck = c.click ? ` data-kpi='${esc(JSON.stringify(c.click))}' role="button" tabindex="0"` : '';
+    return `<div class="kpi${c.click ? ' click' : ''}"${ck}><div class="v">${fmtNum(v, c.fmt)}</div><div class="l">${c.label}${c.sub ? ' <span class="num">' + esc(c.sub(k)) + '</span>' : ''}</div>${d}</div>`;
   }).join('')}</div>`;
 }
 function sbar(t) {
@@ -544,7 +554,9 @@ function statCells(s, compact) {
 function viewOverview(el, ctx) {
   el.innerHTML = kpiCards(ctx.agg.kpis, ctx.prevAgg && ctx.prevAgg.kpis) + domainCards(ctx) +
     `<div class="grid-2"><section class="block"><h2>Top open issues by age</h2>${topIssues(ctx)}</section>
-     <section class="block"><h2>Completion trend in ${esc(C.periodLabel(state.period))}</h2><div class="chart"><canvas id="ch-trend"></canvas></div><p class="muted" style="font-size:.8rem;margin:6px 0 0">Cumulative tasks by task date, and how many of them are done.</p></section></div>`;
+     <section class="block"><h2>Aging of open work</h2><div class="chart"><canvas id="ch-aging"></canvas></div><p class="muted" style="font-size:.8rem;margin:6px 0 0">Click a bar to filter everything to that age.</p></section></div>
+     <section class="block" style="margin-top:16px"><h2>Completion trend in ${esc(C.periodLabel(state.period))}</h2><div class="chart"><canvas id="ch-trend"></canvas></div><p class="muted" style="font-size:.8rem;margin:6px 0 0">Cumulative tasks by task date, and how many of them are done.</p></section>` + tasksBlock(ctx);
+  agingChart('ch-aging', ctx.agingAll);
   const d = ctx.agg.daily;
   chart('ch-trend', { type: 'line', data: { labels: d.map(x => x.date.slice(5)), datasets: [
     { label: 'Tasks', data: d.map(x => x.total), borderColor: css('--brand'), backgroundColor: css('--brand'), tension: .25 },
@@ -555,8 +567,8 @@ function viewDomain(el, ctx) {
     `<section class="block"><h2>Domain → application breakdown</h2>${domainBreakdown(ctx)}</section>
      <div class="grid-2"><section class="block"><h2>Status by domain</h2><div class="chart"><canvas id="ch-dom"></canvas></div>${statusLegend()}</section>
      <section class="block"><h2>Aging of open work</h2><div class="chart"><canvas id="ch-aging"></canvas></div></section></div>` + tasksBlock(ctx);
-  stackedStatus('ch-dom', ctx.agg.byDomain.map(d => d.domain), name => ctx.list.filter(t => t.domain === name), lab => go({ view: 'domain', filter: { domain: lab, app: '' } }));
-  agingChart('ch-aging', ctx.agg.aging);
+  stackedStatus('ch-dom', ctx.agg.byDomain.map(d => d.domain), name => ctx.list.filter(t => t.domain === name), (lab, st) => go({ view: 'domain', filter: { domain: lab, app: '', status: st } }));
+  agingChart('ch-aging', ctx.agingAll);
 }
 function viewApplication(el, ctx) {
   const apps = ctx.agg.byApp;
@@ -564,9 +576,11 @@ function viewApplication(el, ctx) {
     `<section class="block"><h2>Application summary</h2><div class="table-wrap"><table><thead><tr><th>Application</th><th>Domain</th><th class="n">Total</th><th class="n">Done</th><th class="n">Open</th><th class="n">Done %</th><th class="n">Open issues</th><th class="n">Deployments</th><th class="n">Avg age</th></tr></thead><tbody>
       ${apps.map(a => `<tr class="click" data-app="${esc(a.app)}"><td>${esc(a.app)}</td><td>${esc(a.domain)}</td>${statCells(a)}</tr>`).join('') || '<tr><td colspan="9" class="muted">No tasks match these filters.</td></tr>'}</tbody></table></div></section>
      <div class="grid-2"><section class="block"><h2>Tasks by application</h2><div class="chart tall"><canvas id="ch-apps"></canvas></div>${statusLegend()}</section>
-     <section class="block"><h2>Tasks by type</h2><div class="chart tall"><canvas id="ch-type"></canvas></div></section></div>` + tasksBlock(ctx);
+     <section class="block"><h2>Tasks by type</h2><div class="chart tall"><canvas id="ch-type"></canvas></div></section>
+     <section class="block"><h2>Aging of open work</h2><div class="chart"><canvas id="ch-aging"></canvas></div></section></div>` + tasksBlock(ctx);
+  agingChart('ch-aging', ctx.agingAll);
   const top = apps.slice(0, 15);
-  stackedStatus('ch-apps', top.map(a => a.app), name => ctx.list.filter(t => t.app === name), lab => go({ filter: { app: lab } }), true);
+  stackedStatus('ch-apps', top.map(a => a.app), name => ctx.list.filter(t => t.app === name), (lab, st) => go({ filter: { app: lab, status: st } }), true);
   chart('ch-type', { type: 'bar', data: { labels: ctx.agg.byType.map(x => x.type), datasets: [{ label: 'Tasks', data: ctx.agg.byType.map(x => x.count), backgroundColor: css('--brand-2') }] },
     options: { indexAxis: 'y', plugins: { legend: { display: false } }, onClick: (e, els, ch) => { if (els.length) { const v = ch.data.labels[els[0].index]; go({ filter: { type: v === '(blank)' ? '' : v } }); } } } });
 }
@@ -583,9 +597,9 @@ function viewTeam(el, ctx) {
   const ds = [{ label: 'POC', data: m.map(p => p.poc), backgroundColor: css('--brand') }];
   if (w.hasTeam) ds.push({ label: 'Shadowing', data: m.map(p => p.shadow), backgroundColor: '#8fb0e8' });
   chart('ch-team', { type: 'bar', data: { labels: m.map(p => p.name), datasets: ds }, options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true } }, onClick: personClick(m) } });
-  const agingColors = ['#9cc5a7', '#e3c15a', '#ec9443', '#c62828'];
-  chart('ch-team-age', { type: 'bar', data: { labels: m.map(p => p.name), datasets: CFG.agingBuckets.map((b, i) => ({ label: b.label, data: m.map(p => p.aging[i]), backgroundColor: agingColors[i] })) },
-    options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true } }, onClick: personClick(m) } });
+  chart('ch-team-age', { type: 'bar', data: { labels: m.map(p => p.name), datasets: CFG.agingBuckets.map((b, i) => ({ label: b.label, data: m.map(p => p.aging[i]), backgroundColor: AGE_COLORS[i] })) },
+    options: { indexAxis: 'y', scales: { x: { stacked: true }, y: { stacked: true } },
+      onClick: (e, els) => { if (els.length) go({ filter: { person: m[els[0].index].key, age: String(els[0].datasetIndex) } }); } } });
   if (w.hasTeam) chart('ch-req', { type: 'bar', data: { labels: w.requesters.map(p => p.name), datasets: [{ label: 'Tasks raised', data: w.requesters.map(p => p.total), backgroundColor: css('--s-requested') }] },
     options: { indexAxis: 'y', plugins: { legend: { display: false } }, onClick: personClick(w.requesters) } });
 }
@@ -644,6 +658,7 @@ $('#view').addEventListener('click', e => {
   if (t.closest('a')) return;
   const th = t.closest('th[data-sort]');
   if (th) { const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === 'age' ? -1 : 1) }; $('#task-table').innerHTML = taskTable(lastCtx.list); return; }
+  const kp = t.closest('[data-kpi]'); if (kp) { const f = JSON.parse(kp.dataset.kpi); const same = Object.keys(f).every(k => state.filters[k] === f[k]); return go({ filter: same ? Object.fromEntries(Object.keys(f).map(k => [k, ''])) : f }); }
   const ex = t.closest('[data-export]'); if (ex) return ex.dataset.export === 'tasks' ? exportTasks() : exportKpis();
   const qc = t.closest('[data-qc]'); if (qc) return go({ filter: { qc: state.filters.qc === qc.dataset.qc ? '' : qc.dataset.qc } });
   const per = t.closest('[data-period]'); if (per) return go({ view: 'overview', period: per.dataset.period });
@@ -667,16 +682,21 @@ function chart(id, cfg) {
   if (!el) return;
   if (!window.Chart) { el.parentElement.innerHTML = '<div class="chart-msg">Charts are unavailable: Chart.js could not be loaded. Run <code>npm run vendor</code> or check the network.</div>'; return; }
   cfg.options = Object.assign({ responsive: true, maintainAspectRatio: false, animation: false, plugins: {} }, cfg.options || {});
+  if (cfg.options.onClick && !cfg.options.onHover) cfg.options.onHover = (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
   cfg.options.plugins = Object.assign({ legend: { position: 'bottom', labels: { boxWidth: 12 } } }, cfg.options.plugins);
   charts.set(id, new window.Chart(el, cfg));
 }
 function stackedStatus(id, labels, tasksFor, onPick, horizontal) {
   chart(id, { type: 'bar', data: { labels, datasets: CFG.bucketOrder.map(b => ({ label: b, data: labels.map(l => tasksFor(l).filter(t => t.bucket === b).length), backgroundColor: css(STATUS_COLOR[b]) })).filter(d => d.data.some(Boolean)) },
     options: { indexAxis: horizontal ? 'y' : 'x', scales: { x: { stacked: true }, y: { stacked: true } }, plugins: { legend: { display: false } },
-      onClick: (e, els) => { if (els.length) onPick(labels[els[0].index]); } } });
+      onClick: (e, els, ch) => { if (els.length) onPick(labels[els[0].index], ch.data.datasets[els[0].datasetIndex].label); } } });
 }
 function agingChart(id, aging) {
-  chart(id, { type: 'bar', data: { labels: aging.map(a => a.label), datasets: [{ label: 'Open tasks', data: aging.map(a => a.count), backgroundColor: ['#9cc5a7', '#e3c15a', '#ec9443', '#c62828'] }] }, options: { plugins: { legend: { display: false } } } });
+  const sel = state.filters.age;
+  const colors = AGE_COLORS.map((c, i) => sel == null || +sel === i ? c : c + '40');
+  chart(id, { type: 'bar', data: { labels: aging.map(a => a.label), datasets: [{ label: 'Open tasks', data: aging.map(a => a.count), backgroundColor: colors }] },
+    options: { plugins: { legend: { display: false } }, onHover: (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      onClick: (e, els) => { if (els.length) { const i = String(els[0].index); go({ filter: { age: sel === i ? '' : i } }); } } } });
 }
 
 /* ========================================================================= */
