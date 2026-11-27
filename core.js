@@ -80,7 +80,7 @@
       const h = findHeaderRow(grid);
       const heads = (grid[h] || []).map(k => String(k == null ? '' : k).trim());
       out[name] = grid.slice(h + 1)
-        .filter(row => row.some(v => v !== '' && v != null))
+        .filter(row => row.filter(v => v !== '' && v != null).length >= 2) // drop blank rows and one-cell notes/footers
         .map(row => {
           const o = {};
           heads.forEach((k, i) => { if (!k) return; const v = row[i] === undefined ? '' : row[i]; o[k] = v instanceof Date ? dateToYMD(v) : v; });
