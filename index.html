@@ -792,7 +792,9 @@ $('#btn-print').addEventListener('click', () => {
 /* BOOT                                                                      */
 /* ========================================================================= */
 (async function boot() {
-  try { await IDB.open(); (await IDB.all() || []).forEach(r => state.local.set(r.period, r)); }
+  // Never let local storage block the page: give IndexedDB 3 s, then continue with the shared snapshot only.
+  const idbTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('IndexedDB timeout')), 3000));
+  try { await Promise.race([IDB.open(), idbTimeout]); (await Promise.race([IDB.all(), idbTimeout]) || []).forEach(r => state.local.set(r.period, r)); }
   catch (e) { state.idbOk = false; }
   buildPeriods();
   await ensureLib(LIBS.chart);
