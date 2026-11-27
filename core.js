@@ -63,19 +63,29 @@
     return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
   }
 
-  /** Read every sheet into plain rows; real date cells become 'yyyy-mm-dd' strings. */
+  /** Read every sheet into plain rows; real date cells become 'yyyy-mm-dd' strings.
+   *  The header row is detected (title rows above it, like "Application to Domain Map", are skipped). */
+  const KNOWN_HEADERS = ['task', 'application', 'domain', 'type', 'status', 'poc', 'date', 'ticket id', 'name', 'aliases', 'category'];
+  function findHeaderRow(grid) {
+    for (let i = 0; i < Math.min(grid.length, 15); i++) {
+      const cells = (grid[i] || []).map(v => normKey(v)).filter(Boolean);
+      if (cells.length >= 2 && cells.filter(c => KNOWN_HEADERS.includes(c)).length >= 2) return i;
+    }
+    return 0;
+  }
   function sheetsFromWorkbook(wb, XLSX) {
     const out = {};
     for (const name of wb.SheetNames) {
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: true });
-      out[name] = rows.map(r => {
-        const o = {};
-        for (const k of Object.keys(r)) {
-          const v = r[k];
-          o[String(k).trim()] = v instanceof Date ? dateToYMD(v) : v;
-        }
-        return o;
-      });
+      const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: true, blankrows: false });
+      const h = findHeaderRow(grid);
+      const heads = (grid[h] || []).map(k => String(k == null ? '' : k).trim());
+      out[name] = grid.slice(h + 1)
+        .filter(row => row.some(v => v !== '' && v != null))
+        .map(row => {
+          const o = {};
+          heads.forEach((k, i) => { if (!k) return; const v = row[i] === undefined ? '' : row[i]; o[k] = v instanceof Date ? dateToYMD(v) : v; });
+          return o;
+        });
     }
     return out;
   }
@@ -209,7 +219,7 @@
     const mapping = new Map();     // normKey(app) → {app, domain}
     for (const r of det.mapRows) {
       const app = String((mApp && r[mApp]) || '').trim(), dom = String((mDom && r[mDom]) || '').trim();
-      if (!app) continue;
+      if (!app || !dom) continue; // skips notes/footers in the mapping sheet
       const dk = normKey(dom);
       if (dom && !domainCanon.has(dk)) domainCanon.set(dk, dom);
       if (!mapping.has(normKey(app))) mapping.set(normKey(app), { app, domain: dom ? domainCanon.get(dk) : CONFIG.unassigned });
@@ -448,10 +458,10 @@
   const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   function periodFromFileName(name) {
     const s = String(name || '').toLowerCase();
-    let m = s.match(/(20\d{2})[-_ .](0[1-9]|1[0-2])(?!\d)/);
-    if (m) return `${m[1]}-${m[2]}`;
-    m = s.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s_.-]*(20\d{2})\b/);
+    let m = s.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s_.-]*(20\d{2})\b/);
     if (m) return `${m[2]}-${pad(MONTHS.indexOf(m[1].slice(0, 3)) + 1)}`;
+    m = s.match(/(20\d{2})[-_ .](0[1-9]|1[0-2])(?!\d)/);
+    if (m) return `${m[1]}-${m[2]}`;
     return null;
   }
   function periodFromTasks(tasks) {

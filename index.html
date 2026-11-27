@@ -326,7 +326,7 @@ async function getDataset(p) {
   const src = await loadSnap(p).catch(() => null);
   if (!src) return null;
   const ds = C.normalize(src.snap.sheets);
-  C.applyAges(ds.tasks, C.refDateFor(p, todayYMD()));
+  C.applyAges(ds.tasks, todayYMD()); // age = today − ticket creation date (Date column)
   const entry = { ds, ...src };
   state.cache.set(p, entry);
   return entry;
